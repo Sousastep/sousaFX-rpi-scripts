@@ -36,12 +36,10 @@ disable wifi?
 
 https://raspberrytips.com/disable-wifi-raspberry-pi/
 
-/boot/firmware/config.txt
+in /boot/firmware/config.txt find the following line:
+`# Additional overlays and parameters are documented /boot/overlays/README`
 
-Find the following line:
-# Additional overlays and parameters are documented /boot/overlays/README
-
-add this under it:
+and add this under it:
 `dtoverlay=disable-wifi`
 
 enable audio interface
