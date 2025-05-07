@@ -47,7 +47,8 @@ enable audio interface
 
 https://rnbo.cycling74.com/learn/working-with-the-raspberry-pi-target#help-my-usb-audio-interface-isnt-showing-upis-crashing-the-runner
 
-`pi@c74rpi:/home $ cat /proc/asound/cards
+```
+pi@c74rpi:/home $ cat /proc/asound/cards
  0 [Dummy          ]: Dummy - Dummy
                       Dummy 1
  1 [vc4hdmi0       ]: vc4-hdmi - vc4-hdmi-0
@@ -55,27 +56,32 @@ https://rnbo.cycling74.com/learn/working-with-the-raspberry-pi-target#help-my-us
  2 [vc4hdmi1       ]: vc4-hdmi - vc4-hdmi-1
                       vc4-hdmi-1
  3 [AMS22          ]: USB-Audio - AMS-22
-                      ZOOM Corporation AMS-22 at usb-xhci-hcd.0-1, high speed`
+                      ZOOM Corporation AMS-22 at usb-xhci-hcd.0-1, high speed
+```
 
 ~/.asoundrc
 
-`defaults.pcm.card 2
+```
+defaults.pcm.card 2
 defaults.pcm.device 0
-defaults.ctl.card 2`
+defaults.ctl.card 2
+```
 
 enable bluetooth and pair controller
 ------------------------------------
 
 https://discord.com/channels/289378508247924738/1218229779954925588/1369425897287061565
 
-`sudo apt install bluetooth pi-bluetooth bluez blueman
+```
+sudo apt install bluetooth pi-bluetooth bluez blueman
 sudo bluetoothctl
 scan on
 scan off
 pair [XX:XX:XX:XX:XX:XX]
 connect [XX:XX:XX:XX:XX:XX]
 trust [XX:XX:XX:XX:XX:XX]
-exit`
+exit
+```
 
 shutdown
 --------
