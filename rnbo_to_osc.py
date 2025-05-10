@@ -28,16 +28,32 @@ try:
 except OSC.ServerError as err:
     print(err)
 
-def handle_step(path, args):
+# Global variables to store the current values
+current_env = 0
+current_palette = 0
+
+def handle_env(path, args):
+    global current_env, current_palette
     i = args[0]
     
     # Ensure i is a valid byte, and not a start or end marker, by clipping
-    i_byte = max(0, min(253, int(i)))
+    current_env = max(0, min(253, int(i)))
     
-    # Create a byte sequence with start marker (254), data byte, and end marker (255)
-    message = bytes([254, i_byte, 255])
+    # Create a byte sequence with start marker (254), env byte, palette byte, and end marker (255)
+    message = bytes([254, current_env, current_palette, 255])
     ser.write(message)
     # time.sleep(0.001)  # 1ms delay to allow processing
+
+def handle_palette(path, args):
+    global current_env, current_palette
+    p = args[0]
+    
+    # Ensure p is a valid byte, and not a start or end marker, by clipping
+    current_palette = max(0, min(253, int(p)))
+    
+    # Create a byte sequence with start marker (254), env byte, palette byte, and end marker (255)
+    message = bytes([254, current_env, current_palette, 255])
+    ser.write(message)
 
 def fallback(path, args, types, src):
     pass
@@ -47,7 +63,8 @@ def fallback(path, args, types, src):
     #     print("argument of type '%s': %s" % (t, a))
 
 # register callback methods for server routes
-server.add_method("/rnbo/inst/0/messages/out/vfx_env", 'i', handle_step)
+server.add_method("/rnbo/inst/0/messages/out/vfx_env", 'i', handle_env)
+server.add_method("/rnbo/inst/0/messages/out/vfx_palette_number", 'p', handle_palette)
 
 # Finally add fallback method for unhandled OSC addrs
 server.add_method(None, None, fallback)
