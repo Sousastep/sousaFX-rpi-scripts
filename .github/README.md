@@ -36,10 +36,8 @@ sudo apt-get update
 sudo apt upgrade
 sudo apt update
 
-sudo apt install python3-venv python3-full python3-dev build-essential
 sudo apt-get install liblo-dev
 sudo apt install python3-evdev python3-liblo python3-serial
-
 
 enable audio interface
 ----------------------
@@ -82,8 +80,58 @@ trust [XX:XX:XX:XX:XX:XX]
 exit
 ```
 
+auto-run scripts on startup
+---------------------------
+
+/etc/systemd/system/gamepad.service
+```
+[Unit]
+Description=gamepad
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 home/pi/sousaFX-rpi-scripts/gamepad.py
+WorkingDirectory=home/pi/sousaFX-rpi-scripts/
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+```
+
+/etc/systemd/system/oscserial.service
+```
+[Unit]
+Description=oscserial
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 home/pi/sousaFX-rpi-scripts/oscserial.py
+WorkingDirectory=home/pi/sousaFX-rpi-scripts/
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+```
+
+run
+```
+sudo systemctl enable gamepad.service
+sudo systemctl enable oscserial.service
+sudo systemctl start gamepad.service
+sudo systemctl start oscserial.service
+sudo systemctl status gamepad.service
+sudo systemctl status oscserial.service
+```
+
+logs
+```
+sudo journalctl -u script1.service
+sudo journalctl -u script2.service
+```
+
 shutdown
 --------
 
 `sudo shutdown -h now`
-
