@@ -91,7 +91,7 @@ for event in gamepad.read_loop():
             bundle.add(OSC.Message("/rnbo/inst/0/params/BTN_START", event.value))
             bundle_has_messages = True
             
-        elif event.code == ecodes.BTN_NORTH:
+        elif event.code == ecodes.BTN_WEST: #north and west swapped???
             bundle.add(OSC.Message("/rnbo/inst/0/params/BTN_NORTH", event.value))
             bundle_has_messages = True
             
@@ -103,7 +103,7 @@ for event in gamepad.read_loop():
             bundle.add(OSC.Message("/rnbo/inst/0/params/BTN_SOUTH", event.value))
             bundle_has_messages = True
             
-        elif event.code == ecodes.BTN_WEST:
+        elif event.code == ecodes.BTN_NORTH: #north and west swapped???
             bundle.add(OSC.Message("/rnbo/inst/0/params/BTN_WEST", event.value))
             bundle_has_messages = True
     
