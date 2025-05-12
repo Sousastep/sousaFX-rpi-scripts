@@ -31,16 +31,15 @@ update packages
 
 https://rnbo.cycling74.com/learn/working-with-the-raspberry-pi-target#after-exporting-to-my-pi-i-see-message-that-there-are-outdated-packages-on-my-system
 
-disable wifi?
--------------
+sudo apt-get upgrade
+sudo apt-get update
+sudo apt upgrade
+sudo apt update
 
-https://raspberrytips.com/disable-wifi-raspberry-pi/
+sudo apt install python3-venv python3-full python3-dev build-essential
+sudo apt-get install liblo-dev
+sudo apt install python3-evdev python3-liblo python3-serial
 
-in /boot/firmware/config.txt find the following line:
-`# Additional overlays and parameters are documented /boot/overlays/README`
-
-and add this under it:
-`dtoverlay=disable-wifi`
 
 enable audio interface
 ----------------------
@@ -62,19 +61,19 @@ pi@c74rpi:/home $ cat /proc/asound/cards
 ~/.asoundrc
 
 ```
-defaults.pcm.card 2
+defaults.pcm.card 3
 defaults.pcm.device 0
-defaults.ctl.card 2
+defaults.ctl.card 3
 ```
 
 enable bluetooth and pair controller
 ------------------------------------
 
-https://discord.com/channels/289378508247924738/1218229779954925588/1369425897287061565
-
 ```
-sudo apt install bluetooth pi-bluetooth bluez blueman
 sudo bluetoothctl
+power on
+agent on
+default-agent
 scan on
 scan off
 pair [XX:XX:XX:XX:XX:XX]
