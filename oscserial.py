@@ -20,19 +20,23 @@ try:
     print(f"Successfully connected to {SERIAL_PORT}")
 except serial.SerialException as e:
     print(f"Error opening serial port {SERIAL_PORT}: {e}")
-    sys.exit(1)  # Exit with error code
+    time.sleep(8)
+    sys.exit(1)
 
 try:
     target = OSC.Address(1234)
 except OSC.AddressError as err:
     print(err)
-    sys.exit()# set up OSC server - listening on port 4321
+    time.sleep(8)
+    sys.exit(1)
 
 try:
     server = OSC.Server(4321)
     print(f"OSC server started and listening on port 4321")
 except OSC.ServerError as err:
     print(err)
+    time.sleep(8)
+    sys.exit(1)
 
 # Global variables to store the current values
 current_env = 0
