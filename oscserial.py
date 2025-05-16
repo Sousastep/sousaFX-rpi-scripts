@@ -73,7 +73,7 @@ def handle_vfxtype(path, args):
     current_vfxtype = max(0, min(253, int(i)))
     
     # Create a byte sequence with start marker (254), env byte, palette byte, and end marker (255)
-    message = bytes([254, current_env, current_palette, current_vfxtype 255])
+    message = bytes([254, current_env, current_palette, current_vfxtype, 255])
     ser.write(message)
 
 def fallback(path, args, types, src):
