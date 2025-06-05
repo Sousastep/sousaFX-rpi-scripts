@@ -1,0 +1,12 @@
+[Unit]
+Description=gamepad
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/sousaFX-rpi-scripts/gamepad.py
+WorkingDirectory=/home/pi/sousaFX-rpi-scripts/
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
