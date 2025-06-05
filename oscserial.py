@@ -13,14 +13,24 @@ SERIAL_PORT = '/dev/ttyACM0'
 BAUD_RATE = 9600  # Match the baud rate with what's on your Teensy
 
 # Try to open serial connection
-try:
-    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-    # Give the Teensy time to reset after serial connect
-    time.sleep(2)
-    print(f"Successfully connected to {SERIAL_PORT}")
-except serial.SerialException as e:
-    print(f"Error opening serial port {SERIAL_PORT}: {e}")
-    time.sleep(8)
+def connect_serial(max_retries=3, retry_delay=10):
+    for attempt in range(max_retries):
+        try:
+            ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+            time.sleep(2) # Give the Teensy time to reset after serial connect
+            print(f"Successfully connected to {SERIAL_PORT}")
+            return ser
+        except serial.SerialException as e:
+            print(f"Connection attempt {attempt + 1}/{max_retries} failed: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+    
+    print(f"Failed to connect to {SERIAL_PORT} after {max_retries} attempts")
+    return None
+
+ser = connect_serial()
+if ser is None:
     sys.exit(1)
 
 try:
