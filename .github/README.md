@@ -31,10 +31,9 @@ update packages
 
 https://rnbo.cycling74.com/learn/working-with-the-raspberry-pi-target#after-exporting-to-my-pi-i-see-message-that-there-are-outdated-packages-on-my-system
 
-sudo apt-get upgrade
 sudo apt-get update
-sudo apt upgrade
-sudo apt update
+sudo apt-get upgrade
+sudo apt update && sudo apt upgrade
 
 sudo apt-get install liblo-dev
 sudo apt install python3-evdev python3-liblo python3-serial
@@ -57,11 +56,16 @@ pi@c74rpi:/home $ cat /proc/asound/cards
 ```
 
 ~/.asoundrc
-
 ```
 defaults.pcm.card 3
 defaults.pcm.device 0
 defaults.ctl.card 3
+```
+
+or
+```
+cd sousaFX-rpi-scripts/
+cp .asoundrc ~/.asoundrc
 ```
 
 enable bluetooth and pair controller
@@ -83,52 +87,28 @@ exit
 auto-run scripts on startup
 ---------------------------
 
-/etc/systemd/system/gamepad.service
 ```
-[Unit]
-Description=gamepad
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/python3 home/pi/sousaFX-rpi-scripts/gamepad.py
-WorkingDirectory=home/pi/sousaFX-rpi-scripts/
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
-```
-
-/etc/systemd/system/oscserial.service
-```
-[Unit]
-Description=oscserial
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/python3 home/pi/sousaFX-rpi-scripts/oscserial.py
-WorkingDirectory=home/pi/sousaFX-rpi-scripts/
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
+cd sousaFX-rpi-scripts/
+sudo cp gamepad.service /etc/systemd/system/
+sudo cp oscserial.service /etc/systemd/system/
+sudo systemctl enable gamepad.service && sudo systemctl enable oscserial.service
 ```
 
 run
 ```
-sudo systemctl enable gamepad.service
-sudo systemctl enable oscserial.service
 sudo systemctl start gamepad.service
 sudo systemctl start oscserial.service
-sudo systemctl status gamepad.service
-sudo systemctl status oscserial.service
+```
+
+status
+```
+sudo systemctl status gamepad.service && sudo systemctl status oscserial.service
 ```
 
 logs
 ```
-sudo journalctl -u script1.service
-sudo journalctl -u script2.service
+sudo journalctl -u gamepad.service
+sudo journalctl -u oscserial.service
 ```
 
 shutdown
