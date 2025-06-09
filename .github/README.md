@@ -1,7 +1,7 @@
 about
 =====
 
-these scripts connect a gamepad to rnbo via bluetooth, and rnbo to the teensy via usb serial, for use with [SousaFX-rnbo](https://github.com/Sousastep/SousaFX-rnbo)
+these scripts connect a gamepad to rnbo via bluetooth, and rnbo to the [teensy](https://github.com/Sousastep/sousaVFX-teensy) via usb serial, for use with [sousaFX-rnbo](https://github.com/Sousastep/SousaFX-rnbo)
 
 setup overview
 ==============
