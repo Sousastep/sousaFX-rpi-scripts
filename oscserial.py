@@ -10,10 +10,10 @@ import time
 
 # Replace with the correct serial port, often /dev/ttyACM0 or /dev/ttyUSB0 for Teensy
 SERIAL_PORT = '/dev/ttyACM0'
-BAUD_RATE = 9600  # Match the baud rate with what's on your Teensy
+BAUD_RATE = 115200  # Match the baud rate with what's on your Teensy
 
 # Try to open serial connection
-def connect_serial(max_retries=3, retry_delay=10):
+def connect_serial(max_retries=5, retry_delay=10):
     for attempt in range(max_retries):
         try:
             ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
