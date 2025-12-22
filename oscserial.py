@@ -86,6 +86,9 @@ def make_handler(param_name):
     
     return handler
 
+def fallback(path, args):
+    pass
+
 # Register handlers for all parameters
 for param_name, config in PARAMS.items():
     handler = make_handler(param_name)
