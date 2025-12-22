@@ -48,51 +48,48 @@ except OSC.ServerError as err:
     time.sleep(8)
     sys.exit(1)
 
-# Global variables to store the current values
-current_env = 0
-current_palette = 0
-current_vfxtype = 0
+# Configuration for parameters
+PARAMS = {
+    'brightness':       {'index': 0, 'route': '/rnbo/inst/1/messages/out/brightness'},
+    'radius':           {'index': 1, 'route': '/rnbo/inst/1/messages/out/radius'},
+    'palette':          {'index': 2, 'route': '/rnbo/inst/1/messages/out/palette'},
+    'divisions':        {'index': 3, 'route': '/rnbo/inst/1/messages/out/divisions'},
+    'width':            {'index': 4, 'route': '/rnbo/inst/1/messages/out/width'},
+    'curve':            {'index': 5, 'route': '/rnbo/inst/1/messages/out/curve'},
+    'rotation':         {'index': 6, 'route': '/rnbo/inst/1/messages/out/rotation'},
+    'fadeIn':           {'index': 7, 'route': '/rnbo/inst/1/messages/out/fadeIn'},
+    'fadeOut':          {'index': 8, 'route': '/rnbo/inst/1/messages/out/fadeOut'},
+    'peakPosition':     {'index': 9, 'route': '/rnbo/inst/1/messages/out/peakPosition'},
+    'pattern':          {'index': 10, 'route': '/rnbo/inst/1/messages/out/pattern'},
+    'gradientOffset':   {'index': 11, 'route': '/rnbo/inst/1/messages/out/gradientOffset'},
+}
 
-def handle_env(path, args):
-    global current_env, current_palette, current_vfxtype
-    i = args[0]
-    
-    # Ensure i is a valid byte, and not a start or end marker, by clipping
-    current_env = max(0, min(253, int(i)))
-    
-    # Create a byte sequence with start marker (254), env byte, palette byte, and end marker (255)
-    message = bytes([254, current_env, current_palette, current_vfxtype, 255])
+# Store current values in a list (order matches the message format)
+current_values = [90, 253, 0, 2, 201, 126, 231, 59, 0, 128, 0, 0]
+
+def clamp_value(value, min_val=0, max_val=253):
+    """Clamp value to valid range."""
+    return max(min_val, min(max_val, int(value)))
+
+def send_message():
+    """Send current state as a serial message."""
+    message = bytes([254] + current_values + [255])
     ser.write(message)
 
-def handle_palette(path, args):
-    global current_env, current_palette, current_vfxtype
-    i = args[0]
+def make_handler(param_name):
+    """Factory function to create handlers for each parameter."""
+    param_index = PARAMS[param_name]['index']
     
-    # Ensure p is a valid byte, and not a start or end marker, by clipping
-    current_palette = max(0, min(253, int(i)))
+    def handler(path, args):
+        current_values[param_index] = clamp_value(args[0])
+        send_message()
     
-    # Create a byte sequence with start marker (254), env byte, palette byte, and end marker (255)
-    message = bytes([254, current_env, current_palette, current_vfxtype, 255])
-    ser.write(message)
+    return handler
 
-def handle_vfxtype(path, args):
-    global current_env, current_palette, current_vfxtype
-    i = args[0]
-    
-    # Ensure p is a valid byte, and not a start or end marker, by clipping
-    current_vfxtype = max(0, min(253, int(i)))
-    
-    # Create a byte sequence with start marker (254), env byte, palette byte, and end marker (255)
-    message = bytes([254, current_env, current_palette, current_vfxtype, 255])
-    ser.write(message)
-
-def fallback(path, args, types, src):
-    pass
-
-# register callback methods for server routes
-server.add_method("/rnbo/inst/0/messages/out/vfx_env", 'i', handle_env)
-server.add_method("/rnbo/inst/0/messages/out/vfx_palette_number", 'i', handle_palette)
-server.add_method("/rnbo/inst/0/messages/out/wobble_or_solo", 'i', handle_vfxtype)
+# Register handlers for all parameters
+for param_name, config in PARAMS.items():
+    handler = make_handler(param_name)
+    server.add_method(config['route'], 'i', handler)
 
 # Finally add fallback method for unhandled OSC addrs
 server.add_method(None, None, fallback)
