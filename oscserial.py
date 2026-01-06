@@ -3,10 +3,10 @@
 # https://cycling74.com/forums/sending-osc-from-rnbo-to-madmapper#reply-65f041d91371430013ba8bd8
 ################################################################################################
 
-import liblo as OSC
-import sys
-import serial
-import time
+import liblo as OSC     # https://dsacre.github.io/pyliblo/doc/
+import sys              # https://docs.python.org/3/library/sys.html
+import serial           # https://www.pyserial.com/docs
+import time             # https://docs.python.org/3/library/time.html
 
 # Replace with the correct serial port, often /dev/ttyACM0 or /dev/ttyUSB0 for Teensy
 SERIAL_PORT = '/dev/ttyACM0'
@@ -53,7 +53,8 @@ PARAMS = {
     'brightness':       {'index': 0, 'route': '/rnbo/inst/1/messages/out/brightness'},
     'radius':           {'index': 1, 'route': '/rnbo/inst/1/messages/out/radius'},
     'palette':          {'index': 2, 'route': '/rnbo/inst/1/messages/out/palette'},
-    'divisions':        {'index': 3, 'route': '/rnbo/inst/1/messages/out/divisions'},
+    'divisions':        {'index': 3, 'route': '/rnbo/inst/1/messages/out/divisionHi'},
+    'divisions':        {'index': 3, 'route': '/rnbo/inst/1/messages/out/divisionLo'},
     'width':            {'index': 4, 'route': '/rnbo/inst/1/messages/out/width'},
     'curve':            {'index': 5, 'route': '/rnbo/inst/1/messages/out/curve'},
     'rotation':         {'index': 6, 'route': '/rnbo/inst/1/messages/out/rotation'},
@@ -65,11 +66,24 @@ PARAMS = {
 }
 
 # Store current values in a list (order matches the message format)
-current_values = [90, 253, 0, 2, 201, 126, 231, 59, 0, 128, 0, 0]
+current_values = [90, 253, 0, 3, 0, 201, 126, 231, 59, 0, 128, 0, 0]
 
 def clamp_value(value, min_val=0, max_val=253):
     """Clamp value to valid range."""
     return max(min_val, min(max_val, int(value)))
+
+last_send_time = 0
+FPS = 160
+ns_per_frame = 1000000000 / FPS
+
+def send_message():
+    global last_send_time
+    current_time = time.time_ns()
+    
+    if current_time - last_send_time >= ns_per_frame:
+        message = bytes([254] + current_values + [255])
+        ser.write(message)
+        last_send_time = current_time
 
 def send_message():
     """Send current state as a serial message."""
