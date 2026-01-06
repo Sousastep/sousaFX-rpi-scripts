@@ -30,13 +30,14 @@ update packages
 ---------------
 
 https://rnbo.cycling74.com/learn/working-with-the-raspberry-pi-target#after-exporting-to-my-pi-i-see-message-that-there-are-outdated-packages-on-my-system
-
+```
 sudo apt-get update
 sudo apt-get upgrade
 sudo apt update && sudo apt upgrade
 
 sudo apt-get install liblo-dev
 sudo apt install python3-evdev python3-liblo python3-serial
+```
 
 enable audio interface
 ----------------------
