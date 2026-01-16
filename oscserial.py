@@ -53,69 +53,54 @@ PARAMS = {
     'brightness':       {'index': 0, 'route': '/rnbo/inst/1/messages/out/brightness'},
     'radius':           {'index': 1, 'route': '/rnbo/inst/1/messages/out/radius'},
     'palette':          {'index': 2, 'route': '/rnbo/inst/1/messages/out/palette'},
-    'divisions':        {'index': 3, 'route': '/rnbo/inst/1/messages/out/divisionHi'},
-    'divisions':        {'index': 3, 'route': '/rnbo/inst/1/messages/out/divisionLo'},
-    'width':            {'index': 4, 'route': '/rnbo/inst/1/messages/out/width'},
-    'curve':            {'index': 5, 'route': '/rnbo/inst/1/messages/out/curve'},
-    'rotation':         {'index': 6, 'route': '/rnbo/inst/1/messages/out/rotation'},
-    'fadeIn':           {'index': 7, 'route': '/rnbo/inst/1/messages/out/fadeIn'},
-    'fadeOut':          {'index': 8, 'route': '/rnbo/inst/1/messages/out/fadeOut'},
-    'peakPosition':     {'index': 9, 'route': '/rnbo/inst/1/messages/out/peakPosition'},
-    'pattern':          {'index': 10, 'route': '/rnbo/inst/1/messages/out/pattern'},
-    'gradientOffset':   {'index': 11, 'route': '/rnbo/inst/1/messages/out/gradientOffset'},
+    'divisionsHi':      {'index': 3, 'route': '/rnbo/inst/1/messages/out/divisionsHi'},
+    'divisionsLo':      {'index': 4, 'route': '/rnbo/inst/1/messages/out/divisionsLo'},
+    'width':            {'index': 5, 'route': '/rnbo/inst/1/messages/out/width'},
+    'curve':            {'index': 6, 'route': '/rnbo/inst/1/messages/out/curve'},
+    'rotation':         {'index': 7, 'route': '/rnbo/inst/1/messages/out/rotation'},
+    'fadeIn':           {'index': 8, 'route': '/rnbo/inst/1/messages/out/fadeIn'},
+    'fadeOut':          {'index': 9, 'route': '/rnbo/inst/1/messages/out/fadeOut'},
+    'peakPosition':     {'index': 10, 'route': '/rnbo/inst/1/messages/out/peakPosition'},
+    'pattern':          {'index': 11, 'route': '/rnbo/inst/1/messages/out/pattern'},
+    'gradientOffset':   {'index': 12, 'route': '/rnbo/inst/1/messages/out/gradientOffset'},
 }
 
-# Store current values in a list (order matches the message format)
-current_values = [90, 253, 0, 3, 0, 201, 126, 231, 59, 0, 128, 0, 0]
+tx_buffer = bytearray([254] + [0]*13 + [255])
 
-def clamp_value(value, min_val=0, max_val=253):
-    """Clamp value to valid range."""
-    return max(min_val, min(max_val, int(value)))
-
-last_send_time = 0
-FPS = 160
-ns_per_frame = 1000000000 / FPS
-
-def send_message():
-    global last_send_time
-    current_time = time.time_ns()
-    
-    if current_time - last_send_time >= ns_per_frame:
-        message = bytes([254] + current_values + [255])
-        ser.write(message)
-        last_send_time = current_time
-
-def send_message():
-    """Send current state as a serial message."""
-    message = bytes([254] + current_values + [255])
-    ser.write(message)
-
-def make_handler(param_name):
-    """Factory function to create handlers for each parameter."""
-    param_index = PARAMS[param_name]['index']
-    
+def make_handler(index):
     def handler(path, args):
-        current_values[param_index] = clamp_value(args[0])
-        send_message()
-    
+        # Update the buffer directly (index + 1 because of the 254 start byte)
+        tx_buffer[index + 1] = int(args[0])
     return handler
+
+# Register handlers
+for config in PARAMS.values():
+    server.add_method(config['route'], 'i', make_handler(config['index']))
+
+FPS = 320
+ns_per_frame = 1000000000 / FPS
+next_frame = time.time_ns()
+
+try:
+    while True:
+        # Handle all pending OSC messages immediately
+        while server.recv(0): 
+            pass
+        
+        # Precise timing for Serial Write
+        current_time = time.time_ns()
+        if current_time >= next_frame:
+            ser.write(tx_buffer)
+            # Schedule next frame relative to the last one to prevent drift
+            next_frame += ns_per_frame
 
 def fallback(path, args):
     pass
-
-# Register handlers for all parameters
-for param_name, config in PARAMS.items():
-    handler = make_handler(param_name)
-    server.add_method(config['route'], 'i', handler)
 
 # Finally add fallback method for unhandled OSC addrs
 server.add_method(None, None, fallback)
 
 OSC.send(target, "/rnbo/listeners/add", f"127.0.0.1:4321")
-
-try:
-    while True:
-        server.recv(100)  # Timeout in milliseconds
 
 except KeyboardInterrupt:
     print("Exiting cleanly...")
