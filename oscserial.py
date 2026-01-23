@@ -25,7 +25,7 @@ def connect_serial(max_retries=5, retry_delay=10):
             if attempt < max_retries - 1:
                 print(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
-    
+
     print(f"Failed to connect to {SERIAL_PORT} after {max_retries} attempts")
     return None
 
@@ -84,9 +84,9 @@ next_frame = time.time_ns()
 try:
     while True:
         # Handle all pending OSC messages immediately
-        while server.recv(0): 
+        while server.recv(0):
             pass
-        
+
         # Precise timing for Serial Write
         current_time = time.time_ns()
         if current_time >= next_frame:
