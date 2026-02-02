@@ -8,6 +8,23 @@ setup overview
 
 https://rnbo.cycling74.com/learn/raspberry-pi-setup
 
+ssh
+---
+
+`ssh pi@c74rpi.local` or `ssh pi@192.168.1.xx`
+
+update
+------
+
+"Processing triggers for man-db" takes ages. Try this before apt-get next time:
+`echo "set man-db/auto-update false" | debconf-communicate; dpkg-reconfigure man-db`
+from https://askubuntu.com/a/1437819
+
+```
+sudo apt-get update && sudo apt-get upgrade
+sudo apt update && sudo apt upgrade
+```
+
 mount
 -----
 
@@ -18,29 +35,23 @@ install macfuse and sshfs https://macfuse.github.io/
 clone
 -----
 
-`cd /Users/<user>/Desktop/raspberry_pi/home/pi/Documents/
+`cd /Users/<user>/Desktop/raspberry_pi/home/pi/;
 git clone https://github.com/Sousastep/sousaFX-rpi-scripts.git`
 
-ssh
----
 
-`ssh pi@c74rpi.local` or `ssh pi@192.168.1.xx`
 
-update packages
----------------
+install
+-------
 
-https://rnbo.cycling74.com/learn/working-with-the-raspberry-pi-target#after-exporting-to-my-pi-i-see-message-that-there-are-outdated-packages-on-my-system
 ```
-sudo apt-get update
-sudo apt-get upgrade
-sudo apt update && sudo apt upgrade
-
 sudo apt-get install liblo-dev
 sudo apt install python3-evdev python3-liblo python3-serial
 ```
 
 enable audio interface
 ----------------------
+
+this step may not be necessary
 
 https://rnbo.cycling74.com/learn/working-with-the-raspberry-pi-target#help-my-usb-audio-interface-isnt-showing-upis-crashing-the-runner
 
@@ -72,6 +83,8 @@ cp .asoundrc ~/.asoundrc
 enable bluetooth and pair controller
 ------------------------------------
 
+put controller in pairing mode, then
+
 ```
 sudo bluetoothctl
 power on
@@ -84,6 +97,18 @@ connect [XX:XX:XX:XX:XX:XX]
 trust [XX:XX:XX:XX:XX:XX]
 exit
 ```
+
+if something like this happens
+
+```
+[CHG] Device XX:XX:XX:XX:XX:XX Connected: yes
+[CHG] Device XX:XX:XX:XX:XX:XX Connected: no
+[CHG] Device XX:XX:XX:XX:XX:XX Connected: yes
+[CHG] Device XX:XX:XX:XX:XX:XX Connected: no
+[CHG] Device XX:XX:XX:XX:XX:XX Connected: yes
+```
+
+try `remove XX:XX:XX:XX:XX:XX`
 
 auto-run scripts on startup
 ---------------------------
@@ -112,7 +137,30 @@ sudo journalctl -u gamepad.service
 sudo journalctl -u oscserial.service
 ```
 
+shift-G goes to end of file (may take a sec)
+
 shutdown
 --------
 
 `sudo shutdown -h now`
+
+
+connecting android to rpi
+-------------------------
+
+turn on android hotspot
+
+connect rpi to hotspot via `sudo nmtui`: https://rnbo.cycling74.com/learn/raspberry-pi-setup#current-image-1.3.0-and-greater
+
+find IP with termux: https://cycling74.com/forums/how-to-connect-raspberry-pi-to-android-hotspot
+
+reinstalling
+------------
+
+when sshing after reinstalling, you'll see
+
+```
+WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+```
+
+delete `~/.ssh/known_hosts`
