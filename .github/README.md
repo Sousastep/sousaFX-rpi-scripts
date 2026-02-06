@@ -32,20 +32,14 @@ install macfuse and sshfs https://macfuse.github.io/
 
 `sshfs pi@192.168.1.xx:/home/pi ~/Desktop/raspberry_pi -o defer_permissions,noappledouble,nolocalcaches,volname=RaspberryPi`
 
-clone
------
-
-`cd /Users/<user>/Desktop/raspberry_pi/home/pi/;
+clone: `cd /Users/<user>/Desktop/raspberry_pi/home/pi/;
 git clone https://github.com/Sousastep/sousaFX-rpi-scripts.git`
-
-
 
 install
 -------
 
 ```
-sudo apt-get install liblo-dev
-sudo apt install python3-evdev python3-liblo python3-serial
+sudo apt install python3-evdev python3-liblo python3-serial build-essential liblo-dev
 ```
 
 enable audio interface
@@ -110,6 +104,16 @@ if something like this happens
 
 try `remove XX:XX:XX:XX:XX:XX`
 
+
+build
+-----
+
+```
+cd ~/sousaFX-rpi-scripts;
+g++ -O3 oscserial.cpp -o oscserial -llo -lpthread;
+g++ -O3 gamepad.cpp -o gamepad -llo;
+```
+
 auto-run scripts on startup
 ---------------------------
 
@@ -139,11 +143,6 @@ sudo journalctl -u oscserial.service
 
 shift-G goes to end of file (may take a sec)
 
-shutdown
---------
-
-`sudo shutdown -h now`
-
 
 connecting android to rpi
 -------------------------
@@ -153,6 +152,7 @@ turn on android hotspot
 connect rpi to hotspot via `sudo nmtui`: https://rnbo.cycling74.com/learn/raspberry-pi-setup#current-image-1.3.0-and-greater
 
 find IP with termux: https://cycling74.com/forums/how-to-connect-raspberry-pi-to-android-hotspot
+
 
 reinstalling
 ------------
@@ -164,3 +164,10 @@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
 ```
 
 delete `~/.ssh/known_hosts`
+
+
+shutdown
+--------
+
+`sudo shutdown -h now`
+
