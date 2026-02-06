@@ -1,11 +1,13 @@
 [Unit]
-Description=gamepad
+Description=Xbox Controller to OSC Bridge
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/sousaFX-rpi-scripts/gamepad.py
+# Adjust the path to where you saved the compiled binary
+ExecStart=/home/pi/sousaFX-rpi-scripts/gamepad
 WorkingDirectory=/home/pi/sousaFX-rpi-scripts/
 Restart=always
+RestartSec=5
 User=root
 
 [Install]
