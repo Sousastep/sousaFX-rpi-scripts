@@ -87,14 +87,21 @@ try:
 
         # 2. Precise timing for Serial Write
         current_time = time.time_ns()
+        
         if current_time >= next_frame:
             ser.write(tx_buffer)
             next_frame += ns_per_frame
+        else:
+            # If we have more than 1ms to wait, take a tiny nap 
+            # to let the CPU breathe.
+            if next_frame - current_time > 1_000_000:
+                time.sleep(0.001) # 1ms sleep
 
 except KeyboardInterrupt:
     print("\nStopping script...")
 except Exception as e:
     print(f"\nUnexpected error: {e}")
 finally:
+    ser.flush()
     ser.close()
     print("Serial port closed. Cleanup complete.")
