@@ -39,7 +39,7 @@ install
 -------
 
 ```
-sudo apt install python3-evdev python3-liblo python3-serial build-essential liblo-dev
+sudo apt install python3-evdev python3-liblo python3-serial build-essential liblo-dev libevdev-dev
 ```
 
 enable audio interface
