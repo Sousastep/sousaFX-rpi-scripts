@@ -43,65 +43,10 @@ cmake --build build -j$(nproc)
 
 ---
 
-## .asoundrc
-
-The program works without an .asoundrc file if rnboscquery is disabled (`sudo service rnbooscquery stop`), and we use the device flag "plughw:AMS24". However, we need the program to work while rnboscquery is enabled.
-
-using "--device jack" with the following asoundrc file does not work properly due to creating a stereo connection instead of mono for some reason:
-
-```bash
-pcm.jack {
-    type jack
-    playback_ports {
-        0 system:playback_1
-    }
-    capture_ports {
-        0 system:capture_1
-    }
-}
-```
-
-```bash
-pi@c74rpi:~ $ jack_lsp -c
-system:capture_1
-   flucoma_pitch_osc.C.31911.0:in_000
-system:capture_2
-   flucoma_pitch_osc.C.31911.0:in_001
-system:playback_1
-```
-
-Using no device flag with the following asoundrc file does indeed work properly:
-
-```bash
-pcm.!default {
-    type jack
-    playback_ports {
-        0 system:playback_1
-    }
-    capture_ports {
-        0 system:capture_1
-    }
-}
-
-ctl.!default {
-    type hw
-    card AMS24
-}
-```
-
-```bash
-pi@c74rpi:~ $ jack_lsp -c
-system:capture_1
-   flucoma_pitch_osc.C.31919.0:in_000
-system:capture_2
-system:playback_1
-```
-
-
 ## Run
 
 ```bash
-./build/flucoma_pitch_osc --rate 48000 --blocksize 256 --fftsize 4096 --winsize 4096 --minFreq 20 --maxFreq 400 --hopsize 4096
+./flucoma_pitch_osc --fftsize 4096 --winsize 4096 --hopsize 1024 --minfreq 30 --maxfreq 400 --port 1234
 ```
 
 ### All flags
