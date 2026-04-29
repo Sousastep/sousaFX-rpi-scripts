@@ -1,0 +1,13 @@
+[Unit]
+Description=FluCoMa Pitch OSC Service
+After=network.target
+
+[Service]
+ExecStart=/home/pi/sousaFX-rpi-scripts/fluid_pitch/build/flucoma_pitch_osc --fftsize 4096 --winsize 4096 --hopsize 1024 --minfreq 30 --maxfreq 400 --port 1234
+WorkingDirectory=/home/pi/sousaFX-rpi-scripts/fluid_pitch/build
+Restart=always
+RestartSec=5
+User=pi
+
+[Install]
+WantedBy=multi-user.target
