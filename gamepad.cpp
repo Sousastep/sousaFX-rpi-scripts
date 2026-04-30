@@ -19,8 +19,8 @@ namespace fs = std::filesystem;
 // --- Configuration ---
 const std::string TARGET_NAME = "Xbox Wireless Controller";
 const char* OSC_PORT = "1234";
-const std::string BASE_PATH = "/rnbo/inst/0/params/gpin/";
-const int HEARTBEAT_INTERVAL = 60; // Seconds
+const std::string BASE_PATH = "/";
+const int HEARTBEAT_INTERVAL = 180; // Seconds
 
 // Maps evdev codes to OSC suffixes
 std::map<int, std::string> EVENT_MAP = {

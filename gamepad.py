@@ -5,8 +5,8 @@ import time
 
 TARGET_NAME = "Xbox Wireless Controller"
 OSC_PORT = 1234
-BASE_PATH = "/rnbo/inst/0/params/gpin/"
-HEARTBEAT_INTERVAL = 60  # seconds between soft rumbles
+BASE_PATH = "/"
+HEARTBEAT_INTERVAL = 180  # seconds between soft rumbles
 
 EVENT_MAP = {
     # Analog (EV_ABS)
