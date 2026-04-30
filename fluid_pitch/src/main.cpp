@@ -240,10 +240,10 @@ static int jackProcess(jack_nframes_t nframes, void* arg) {
         if (conf >= s->cfg->confThresh) {
             int len;
             len = osc::buildFloatMsg(s->oscBuf, sizeof(s->oscBuf),
-                                     "/rnbo/inst/0/params/pitchfreq", freq);
+                                     "/pitchfreq", freq);
             s->udp->send(s->oscBuf, len);
             len = osc::buildFloatMsg(s->oscBuf, sizeof(s->oscBuf),
-                                     "/rnbo/inst/0/params/pitchconf", conf);
+                                     "/pitchconf", conf);
             s->udp->send(s->oscBuf, len);
         }
     });
