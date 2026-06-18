@@ -25,25 +25,28 @@ struct ParamConfig {
     std::string route;
 };
 
+// with default outport objects, these would have to be "/rnbo/inst/1/messages/out/brightness"
+// by adding "@meta 'osc':'/brightness'" to the outport objects, these can simply be "brightness"
 const std::vector<ParamConfig> PARAMS = {
-    {0,  "/rnbo/inst/1/messages/out/brightness"},
-    {1,  "/rnbo/inst/1/messages/out/radius"},
-    {2,  "/rnbo/inst/1/messages/out/palette"},
-    {3,  "/rnbo/inst/1/messages/out/divisionsHi"},
-    {4,  "/rnbo/inst/1/messages/out/divisionsLo"},
-    {5,  "/rnbo/inst/1/messages/out/width"},
-    {6,  "/rnbo/inst/1/messages/out/curve"},
-    {7,  "/rnbo/inst/1/messages/out/rotation"},
-    {8,  "/rnbo/inst/1/messages/out/fadeIn"},
-    {9,  "/rnbo/inst/1/messages/out/fadeOut"},
-    {10, "/rnbo/inst/1/messages/out/peakPosition"},
-    {11, "/rnbo/inst/1/messages/out/pattern"},
-    {12, "/rnbo/inst/1/messages/out/gradientOffset"}
+    {0,  "brightness"},
+    {1,  "radius"},
+    {2,  "palette"},
+    {3,  "divisionsHi"},
+    {4,  "divisionsLo"},
+    {5,  "width"},
+    {6,  "curve"},
+    {7,  "rotation"},
+    {8,  "fadeIn"},
+    {9,  "fadeOut"},
+    {10, "peakPosition"},
+    {11, "pattern"},
+    {12, "gradientOffset"}
+    {13, "maskType"}
 };
 
 // --- Global State ---
-// Buffer: [Start Byte] + [13 Data Bytes] + [End Byte] = 15 total
-unsigned char tx_buffer[15] = {254, 0,0,0,0,0,0,0,0,0,0,0,0,0, 255};
+// Buffer: [Start Byte] + [14 Data Bytes] + [End Byte] = 16 total
+unsigned char tx_buffer[16] = {254, 0,0,0,0,0,0,0,0,0,0,0,0,0,0, 255};
 std::mutex buffer_mutex;
 
 // --- OSC Callback Handler ---
@@ -55,7 +58,7 @@ int generic_handler(const char *path, const char *types, lo_arg **argv,
     
     // Update buffer thread-safely
     std::lock_guard<std::mutex> lock(buffer_mutex);
-    if (index >= 0 && index < 13) {
+    if (index >= 0 && index < 14) {
         tx_buffer[index + 1] = (unsigned char)argv[0]->i;
     }
     
@@ -134,7 +137,7 @@ int main() {
         while (true) {
             {
                 std::lock_guard<std::mutex> lock(buffer_mutex);
-                if (write(serial_fd, tx_buffer, 15) < 0) {
+                if (write(serial_fd, tx_buffer, 16) < 0) {
                     std::cerr << "Serial write error" << std::endl;
                 }
             }
