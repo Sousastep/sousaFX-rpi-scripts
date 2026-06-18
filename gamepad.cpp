@@ -34,8 +34,8 @@ std::map<int, std::string> EVENT_MAP = {
     {ABS_HAT0Y, "ABS_HAT0Y"},
     {BTN_TL, "BTN_TL"}, 
     {BTN_TR, "BTN_TR"}, 
-    {BTN_SELECT, "BTN_START"}, // Select and start swapped for some reason ???
-    {BTN_START, "BTN_SELECT"},//
+    {BTN_SELECT, "BTN_SELECT"}, 
+    {BTN_START, "BTN_START"},
     {BTN_EAST, "BTN_EAST"}, 
     {BTN_SOUTH, "BTN_SOUTH"}, 
     {BTN_THUMBL, "BTN_THUMBL"}, 
