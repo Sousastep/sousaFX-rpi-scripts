@@ -26,22 +26,22 @@ struct ParamConfig {
 };
 
 // with default outport objects, these would have to be "/rnbo/inst/1/messages/out/brightness"
-// by adding "@meta 'osc':'/brightness'" to the outport objects, these can simply be "brightness"
+// by adding "@meta 'osc':'/brightness'" to the outport objects, these can simply be "/brightness"
 const std::vector<ParamConfig> PARAMS = {
-    {0,  "brightness"},
-    {1,  "radius"},
-    {2,  "palette"},
-    {3,  "divisionsHi"},
-    {4,  "divisionsLo"},
-    {5,  "width"},
-    {6,  "curve"},
-    {7,  "rotation"},
-    {8,  "fadeIn"},
-    {9,  "fadeOut"},
-    {10, "peakPosition"},
-    {11, "pattern"},
-    {12, "gradientOffset"}
-    {13, "maskType"}
+    {0,  "/brightness"},
+    {1,  "/radius"},
+    {2,  "/palette"},
+    {3,  "/divisionsHi"},
+    {4,  "/divisionsLo"},
+    {5,  "/width"},
+    {6,  "/curve"},
+    {7,  "/rotation"},
+    {8,  "/fadeIn"},
+    {9,  "/fadeOut"},
+    {10, "/peakPosition"},
+    {11, "/pattern"},
+    {12, "/gradientOffset"},
+    {13, "/maskType"}
 };
 
 // --- Global State ---
