@@ -114,6 +114,12 @@ g++ -O3 oscserial.cpp -o oscserial -llo -lpthread;
 g++ -O3 gamepad.cpp -o gamepad -llo;
 ```
 
+new build? restart service:
+```
+sudo systemctl restart oscserial.service
+```
+
+
 auto-run scripts on startup
 ---------------------------
 
