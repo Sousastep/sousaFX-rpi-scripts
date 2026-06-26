@@ -14,22 +14,57 @@
 #include <filesystem>
 #include <chrono>
 #include <cstring>
+#include <atomic>
+#include <memory>
 
 namespace fs = std::filesystem;
 
 // --- Configuration ---
-const char*       OSC_HOST            = nullptr;  // nullptr = localhost
-const char*       OSC_PORT            = "1234";
-const std::string TARGET_NAME         = "Xbox Wireless Controller";
-const std::string BASE_PATH           = "/";
+const char* OSC_HOST             = nullptr;  // nullptr = localhost
+const char* OSC_PORT             = "1234";
+const std::string TARGET_NAME          = "Xbox Wireless Controller";
+const std::string BASE_PATH            = "/";
 const int         HEARTBEAT_INTERVAL_S = 180;
-const int         RUMBLE_DURATION_MS  = 60;
-const int         RECONNECT_DELAY_S   = 3;
-const int         POLL_TIMEOUT_MS     = 50;
+const int         RUMBLE_DURATION_MS   = 60;
+const int         RECONNECT_DELAY_S    = 3;
+const int         POLL_TIMEOUT_MS      = 50;
 
-// --- Clean shutdown via SIGINT / SIGTERM ---
-static volatile sig_atomic_t g_running = 1;
-static void on_signal(int) { g_running = 0; }
+// --- Clean shutdown via atomic flags ---
+static std::atomic<bool> g_running{true};
+static void on_signal(int) { g_running = false; }
+
+// --- RAII Wrappers for safe resource management ---
+struct FileDescriptor {
+    int fd;
+    FileDescriptor(int f = -1) : fd(f) {}
+    ~FileDescriptor() { if (fd >= 0) close(fd); }
+    
+    operator int() const { return fd; }
+    
+    FileDescriptor& operator=(int f) {
+        if (fd >= 0) close(fd);
+        fd = f;
+        return *this;
+    }
+    
+    bool is_open() const { return fd >= 0; }
+    
+    void close_fd() {
+        if (fd >= 0) {
+            close(fd);
+            fd = -1;
+        }
+    }
+};
+
+struct OscTarget {
+    lo_address addr;
+    OscTarget(const char* host, const char* port) { addr = lo_address_new(host, port); }
+    ~OscTarget() { if (addr) lo_address_free(addr); }
+    
+    operator lo_address() const { return addr; }
+    bool is_valid() const { return addr != nullptr; }
+};
 
 // Maps evdev codes to precomputed OSC address strings.
 const std::unordered_map<int, std::string> EVENT_MAP = {
@@ -60,25 +95,23 @@ std::string find_controller() {
             const std::string path = entry.path().string();
             if (path.find("event") == std::string::npos) continue;
 
-            int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK);
-            if (fd < 0) continue;
+            FileDescriptor fd(open(path.c_str(), O_RDONLY | O_NONBLOCK));
+            if (!fd.is_open()) continue;
 
             char name[256] = {};
             ioctl(fd, EVIOCGNAME(sizeof(name)), name);
-            close(fd);
 
             if (std::string(name).find(TARGET_NAME) != std::string::npos)
                 return path;
         }
     } catch (const fs::filesystem_error& e) {
-        std::cerr << "Error scanning /dev/input: " << e.what() << std::endl;
+        std::cerr << "Error scanning /dev/input: " << e.what() << "\n";
     }
     return "";
 }
 
 // Uploads a rumble effect and starts playing it. Returns the kernel effect
-// ID (>= 0) on success, or -1 on failure. The caller must call
-// remove_rumble() after RUMBLE_DURATION_MS to release the effect slot.
+// ID (>= 0) on success, or -1 on failure.
 int start_rumble(int fd) {
     struct ff_effect effect = {};
     effect.type                      = FF_RUMBLE;
@@ -103,13 +136,22 @@ void remove_rumble(int fd, int effect_id) {
     if (effect_id >= 0) ioctl(fd, EVIOCRMFF, effect_id);
 }
 
-int main() {
-    signal(SIGINT,  on_signal);
-    signal(SIGTERM, on_signal);
+// Set up robust signal handling using sigaction
+void setup_signals() {
+    struct sigaction sa = {};
+    sa.sa_handler = on_signal;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART; // Prevents interrupted system calls (like poll)
+    sigaction(SIGINT, &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
+}
 
-    lo_address target = lo_address_new(OSC_HOST, OSC_PORT);
-    if (!target) {
-        std::cerr << "Failed to create OSC address on port " << OSC_PORT << std::endl;
+int main() {
+    setup_signals();
+
+    OscTarget target(OSC_HOST, OSC_PORT);
+    if (!target.is_valid()) {
+        std::cerr << "Failed to create OSC address on port " << OSC_PORT << "\n";
         return 1;
     }
 
@@ -119,20 +161,20 @@ int main() {
         // --- Device discovery ---
         const std::string path = find_controller();
         if (path.empty()) {
-            std::cout << "Searching for \"" << TARGET_NAME << "\"..." << std::endl;
+            std::cout << "Searching for \"" << TARGET_NAME << "\"...\n";
             sleep(RECONNECT_DELAY_S);
             continue;
         }
 
-        int fd = open(path.c_str(), O_RDWR | O_NONBLOCK);
-        if (fd < 0) {
-            std::cerr << "Failed to open " << path << ": " << strerror(errno) << std::endl;
+        FileDescriptor fd(open(path.c_str(), O_RDWR | O_NONBLOCK));
+        if (!fd.is_open()) {
+            std::cerr << "Failed to open " << path << ": " << strerror(errno) << "\n";
             sleep(RECONNECT_DELAY_S);
             continue;
         }
-        std::cout << "Connected to " << path << std::endl;
+        std::cout << "Connected to " << path << "\n";
 
-        // --- Rumble state (managed non-blocking across loop iterations) ---
+        // --- Rumble state ---
         int     rumble_id = -1;
         bool    rumbling  = false;
         std::chrono::steady_clock::time_point rumble_stop;
@@ -165,50 +207,61 @@ int main() {
                 last_heartbeat = now;
             }
 
-            // Block until input arrives or timeout expires.
-            // The short timeout keeps rumble/heartbeat bookkeeping responsive
-            // without burning CPU when the controller is idle.
             const int ret = poll(&pfd, 1, POLL_TIMEOUT_MS);
             if (ret < 0) {
-                if (errno == EINTR) continue;  // Signal interrupted; re-check g_running
-                std::cerr << "poll() error: " << strerror(errno) << std::endl;
+                if (errno == EINTR) continue;  // Re-check g_running on generic interrupts
+                std::cerr << "poll() error: " << strerror(errno) << "\n";
                 break;
             }
             if (ret == 0) continue;            // Timeout; loop back for housekeeping
 
             if (pfd.revents & (POLLERR | POLLHUP)) {
-                std::cout << "Controller disconnected." << std::endl;
+                std::cout << "Controller disconnected.\n";
                 break;
             }
 
-            // Drain all queued events in one go
+            // Drain all queued events and bundle them
             struct input_event ev;
             ssize_t nread;
+            lo_bundle bundle = nullptr;
+
             while ((nread = read(fd, &ev, sizeof(ev))) > 0) {
                 if (ev.type == EV_ABS || ev.type == EV_KEY) {
                     const auto it = EVENT_MAP.find(ev.code);
                     if (it != EVENT_MAP.end()) {
-                        if (lo_send(target, it->second.c_str(), "i", ev.value) < 0) {
-                            std::cerr << "OSC send failed: "
-                                      << lo_address_errstr(target) << std::endl;
-                        }
+                        
+                        // Initialize bundle lazily if we have valid events
+                        if (!bundle) bundle = lo_bundle_new(LO_TT_IMMEDIATE);
+
+                        lo_message msg = lo_message_new();
+                        lo_message_add_int32(msg, ev.value);
+                        lo_bundle_add_message(bundle, it->second.c_str(), msg);
                     }
                 }
             }
+
             if (nread < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                std::cerr << "Read error: " << strerror(errno) << std::endl;
+                std::cerr << "Read error: " << strerror(errno) << "\n";
+                if (bundle) lo_bundle_free(bundle);
                 break;
+            }
+
+            // Send the batch of events in a single network packet
+            if (bundle) {
+                if (lo_send_bundle(target, bundle) < 0) {
+                    std::cerr << "OSC bundle send failed.\n";
+                }
+                lo_bundle_free(bundle);
             }
         }
 
         // Clean up before attempting reconnect
         if (rumbling) remove_rumble(fd, rumble_id);
-        close(fd);
+        fd.close_fd();
 
         if (g_running) sleep(RECONNECT_DELAY_S);
     }
 
-    std::cout << "Shutting down." << std::endl;
-    lo_address_free(target);
+    std::cout << "Shutting down.\n";
     return 0;
 }
