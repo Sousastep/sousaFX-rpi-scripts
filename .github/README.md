@@ -160,6 +160,21 @@ connect rpi to hotspot via `sudo nmtui`: https://rnbo.cycling74.com/learn/raspbe
 find IP with termux: https://cycling74.com/forums/how-to-connect-raspberry-pi-to-android-hotspot
 
 
+log2ram
+-------
+
+write logs to ram instead of SD card
+
+https://github.com/azlux/log2ram
+
+
+recording
+---------
+
+`sudo service rnbooscquery stop` allows audio to be recorded via
+`arecord -D hw:AMS24 -f S32_LE -r 48000 -c 2 -d 5 test.wav`
+
+
 reinstalling
 ------------
 
@@ -176,4 +191,148 @@ shutdown
 --------
 
 `sudo shutdown -h now`
+
+
+Exporting SousaFX & SousaVFX to rPI
+===================================
+
+delete old files
+----------------
+
+Turn on the rPI with its audio interface attached.
+
+Open https://c74rpi.local:3000/
+
+In Graph Editor, delete all devices.
+
+In Manage Resources > Graphs, delete all graphs.
+
+In Manage Resources > Patchers, delete all patchers.
+
+In Graph Editor > Open Graph Presets Menu > three dots to the right of "initial" > Delete.
+
+In Settings > Devices, uncheck all Auto Connect toggles.
+
+
+export sousafx
+--------------
+
+Check `cd ~/Documents/Max\ 8/Projects/SousaFX-rnbo && git status` for uncomitted changes.
+
+Delete any maxsnaps in `/SousaFX-rnbo/data/`.
+
+Open `SousaFX-rnbo.maxproj`
+
+Select preset number 2: "Sousa AMS-24"
+
+Disable the custom menubar with `option m`, or `menubar > File > Max Menus`.
+
+Exit presentation mode with `option command e`, or `menubar > View > Presentation`.
+
+Click the "remove certain IO before exporting to rPI" button.
+
+Click the "open subpatcher containing sousaFX-rnbo~" button.
+
+Press `option command m`, or click the pencil icon in the bottom left, to modify read-only.
+
+Press `command e`, or click the lock icon in the bottom left, to edit.
+
+Select the `rnbo~ @patchername SousaFX-rnbo ...` object.
+
+Click the "Show Snapshots" button on the right.
+
+Click "New..." to create a new snapshot using the contents of the current preset.
+
+Click the circle above "New..." to embed the snapshot so it can be exported to the rPI.
+
+Press `command e`, or click the lock icon in the bottom left, to lock.
+
+Double-click the `rnbo~ @patchername SousaFX-rnbo ...` object.
+
+Click "Show Export Sidebar".
+
+Click c74rpi.
+
+Uncheck "Migrate Presets".
+
+Click the "Export to selected target" button.
+
+Optional: ssh into the rPI and run `htop` to watch the compilation run. 
+
+Devices > Open Device Preset Menu > Click "SousaFX-rnbo" to load preset.
+
+Devices > Parameters > Search for "noise", check that "noise gate thresh" param matches max preset.
+
+If not, reload the browser tab, then reload the preset.
+
+
+export sousavfx
+---------------
+
+Check `cd ~/Documents/Max\ 8/Projects/sousaVFX-teensy && git status` for uncomitted changes.
+
+Open `SousaVFX-maxteensy.maxproj`
+
+Exit presentation mode with `option command e`, or `menubar > View > Presentation`.
+
+Click the "open" button.
+
+Click "Show Export Sidebar".
+
+Click c74rpi.
+
+Uncheck "Migrate Presets" and "Include Presets".
+
+Click the "Export to selected target" button.
+
+
+setup correct initialization
+----------------------------
+
+Goto https://c74rpi.local:3000/ Graph Editor
+
+Add Node > both patchers
+
+Connect like this: [pic]
+
+Devices > Open Device Preset Menu > Click "SousaFX-rnbo" to load preset.
+
+Three dots to the right of "SousaFX-rnbo" (Preset Actions) > Load on Startup
+
+Graph Editor > Open Graph Menu > Save Graph As > sousastep > Save Graph
+
+Open Graph Menu > Manage Graphs > Configure Startup Settings > Load graph sousastep > save
+
+test with `sudo reboot`
+
+
+notes on htop
+-------------
+
+Check `htop`. Using ~90% of one single core?
+
+`sudo reboot`
+
+Now `htop` shows utilization spread across all 4 cores...
+
+Note: sousafx will crackle while htop is running.
+
+
+notes on Zoom AMS-24
+--------------------
+
+With an Audio-Technica Pro35 phantom-powered mic, a mic gain between 2.5 and 2.9 is best. Watch for the red clipping LED.
+
+Best audio from Zoom to Minirig:
+
+Zoom dual 1/4" outs > 
+dual 1/4" TS to single 1/4" TRS cable > 
+socket/socket 1/4" TRS adapter > 
+1/4" to 1/8" adapter > 
+1/8" TRS cable > 
+Minirig aux input
+
+Using the Zoom's headphone out to run the Minirig results in lackluster volume levels.
+
+Zoom's Dual 1/4" outputs, at +4 dBu, are ~3 dB quieter than the digital output.
 
