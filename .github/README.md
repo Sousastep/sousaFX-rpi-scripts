@@ -111,7 +111,7 @@ build
 ```
 cd ~/sousaFX-rpi-scripts;
 g++ -O3 oscserial.cpp -o oscserial -llo -lpthread;
-g++ -O3 gamepad.cpp -o gamepad -llo;
+g++ -O3 -std=c++17 gamepad.cpp -o gamepad -llo;
 ```
 
 new build? restart service:
