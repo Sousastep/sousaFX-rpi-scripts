@@ -19,14 +19,6 @@ sudo apt install git
 
 ---
 
-## Modify
-
-RNBO patchers are numbered ( 0-indexed ) in the order that they're uploaded to the rpi. 
-
-In main.cpp, the number in "/rnbo/inst/0/params/" should be modified to match the number of the patcher that the OSC data will be sent to.
-
----
-
 ## Build
 
 ```bash
