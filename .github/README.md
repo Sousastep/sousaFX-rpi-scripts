@@ -111,8 +111,10 @@ build
 ```
 cd ~/sousaFX-rpi-scripts;
 g++ -O3 -std=c++17 -march=native -mtune=native -ffast-math oscserial.cpp -o oscserial -llo -lpthread;
-g++ -O3 -std=c++17 gamepad.cpp -o gamepad -llo;
+g++ -O3 -std=c++17 -march=native -mtune=native -flto gamepad.cpp -o gamepad -llo;
 ```
+
+
 
 new build? restart service:
 ```
