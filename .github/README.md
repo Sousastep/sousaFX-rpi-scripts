@@ -39,13 +39,13 @@ install
 -------
 
 ```
-sudo apt install python3-evdev python3-liblo python3-serial build-essential liblo-dev libevdev-dev
+sudo apt install python3-evdev python3-liblo python3-serial build-essential liblo-dev libevdev-dev evtest
 ```
 
 enable audio interface
 ----------------------
 
-this step may not be necessary
+this step is generally not necessary
 
 https://rnbo.cycling74.com/learn/working-with-the-raspberry-pi-target#help-my-usb-audio-interface-isnt-showing-upis-crashing-the-runner
 
@@ -126,27 +126,34 @@ auto-run scripts on startup
 ---------------------------
 
 ```
-cd sousaFX-rpi-scripts/
-sudo cp gamepad.service /etc/systemd/system/
-sudo cp oscserial.service /etc/systemd/system/
-sudo systemctl enable gamepad.service && sudo systemctl enable oscserial.service
+cd sousaFX-rpi-scripts/;
+sudo cp gamepad.service /etc/systemd/system/;
+sudo cp oscserial.service /etc/systemd/system/;
+sudo cp flucoma_pitch_osc.service /etc/systemd/system/;
+sudo systemctl enable gamepad.service;
+sudo systemctl enable oscserial.service;
+sudo systemctl enable flucoma_pitch_osc.service;
 ```
 
 run
 ```
-sudo systemctl start gamepad.service
-sudo systemctl start oscserial.service
+sudo systemctl start gamepad.service;
+sudo systemctl start oscserial.service;
+sudo systemctl start flucoma_pitch_osc.service;
 ```
 
 status
 ```
-sudo systemctl status gamepad.service && sudo systemctl status oscserial.service
+sudo systemctl status gamepad.service;
+sudo systemctl status oscserial.service;
+sudo systemctl status flucoma_pitch_osc.service;
 ```
 
 logs
 ```
 sudo journalctl -u gamepad.service
 sudo journalctl -u oscserial.service
+sudo journalctl -u flucoma_pitch_osc.service;
 ```
 
 shift-G goes to end of file (may take a sec)

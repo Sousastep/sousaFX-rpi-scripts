@@ -12,9 +12,7 @@ A standalone C++ program for **Raspberry Pi 5** that:
 
 ```bash
 sudo apt update
-sudo apt install libasound2-dev
-sudo apt install libjack-jackd2-dev
-sudo apt install git
+sudo apt install libasound2-dev libjack-jackd2-dev git cmake
 ```
 
 ---
