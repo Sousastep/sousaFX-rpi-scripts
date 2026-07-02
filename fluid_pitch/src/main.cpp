@@ -13,6 +13,7 @@
 #include <vector>
 #include <memory>
 #include <complex>
+#include <semaphore.h>
 
 // JACK
 #include <jack/jack.h>
@@ -66,6 +67,9 @@ static int buildFloatMsg(uint8_t* buf, size_t bufSize, const char* path, float v
 }
 
 // ─── UDP / OSC sender ────────────────────────────────────────────────────────
+// NOTE: send() does a sendto() syscall. This struct is now only ever touched
+// from the worker thread (never from the JACK RT callback), so a syscall here
+// is fine — it can no longer cause an xrun.
 
 struct UdpSender {
     int fd{-1};
@@ -128,7 +132,43 @@ static Config parseArgs(int argc, char** argv) {
     return cfg;
 }
 
+// ─── Lock-free single-producer / single-consumer sample ring ────────────────
+// Producer = JACK RT thread (push only: array writes + one atomic store,
+// no locks, no syscalls, no allocation -> safe to call from process()).
+// Consumer = worker thread (reads by absolute sample index).
+
+class SampleRing {
+public:
+    void init(int minCapacitySamples) {
+        size_t cap = 1;
+        while (cap < static_cast<size_t>(minCapacitySamples)) cap <<= 1;
+        mMask = cap - 1;
+        mBuf.assign(cap, 0.0f);
+    }
+
+    // RT-safe: call only from the JACK process callback.
+    void push(const float* src, size_t n) {
+        uint64_t w = mWrite.load(std::memory_order_relaxed);
+        for (size_t i = 0; i < n; ++i)
+            mBuf[static_cast<size_t>(w + i) & mMask] = src[i];
+        mWrite.store(w + n, std::memory_order_release);
+    }
+
+    uint64_t writeIndex() const { return mWrite.load(std::memory_order_acquire); }
+
+    float sampleAt(uint64_t absoluteIndex) const {
+        return mBuf[static_cast<size_t>(absoluteIndex) & mMask];
+    }
+
+private:
+    std::vector<float> mBuf;
+    size_t mMask{0};
+    std::atomic<uint64_t> mWrite{0};
+};
+
 // ─── Pitch processor ─────────────────────────────────────────────────────────
+// All analysis here now runs on the worker thread only. Nothing in this class
+// is ever called from the JACK RT callback anymore.
 
 struct PitchProcessor {
     using RealTensor = fluid::FluidTensor<double, 1>;
@@ -143,9 +183,6 @@ struct PitchProcessor {
     RealTensor mDescriptors;
 
     std::vector<std::complex<double>> mSpecBuf;
-    std::vector<double> mRing;
-    int mRingWrite{0};
-    int mHopCount{0};
 
     Config mCfg;
 
@@ -156,7 +193,6 @@ struct PitchProcessor {
         mFrame.resize(cfg.winSize);
         mMagnitude.resize(specSize);
         mDescriptors.resize(2);
-        mRing.assign(cfg.winSize, 0.0);
         mSpecBuf.resize(specSize);
 
         auto& alloc = fluid::FluidDefaultAllocator();
@@ -171,18 +207,14 @@ struct PitchProcessor {
         return true;
     }
 
+    // Called from the worker thread once `hopEndIndex` samples are available
+    // in the ring (i.e. samples [hopEndIndex - winSize, hopEndIndex) exist).
     template<typename Fn>
-    void process(const float* samples, int n, Fn callback) {
-        for (int i = 0; i < n; ++i) {
-            mRing[mRingWrite] = static_cast<double>(samples[i]);
-            mRingWrite = (mRingWrite + 1) % mCfg.winSize;
-            if (++mHopCount >= mCfg.hopSize) {
-                mHopCount = 0;
-                for (int j = 0; j < mCfg.winSize; ++j)
-                    mFrame(j) = mRing[(mRingWrite + j) % mCfg.winSize];
-                analysisHop(callback);
-            }
-        }
+    void analysisHopFromRing(const SampleRing& ring, uint64_t hopEndIndex, Fn callback) {
+        uint64_t start = hopEndIndex - static_cast<uint64_t>(mCfg.winSize);
+        for (int j = 0; j < mCfg.winSize; ++j)
+            mFrame(j) = static_cast<double>(ring.sampleAt(start + static_cast<uint64_t>(j)));
+        analysisHop(callback);
     }
 
 private:
@@ -219,16 +251,40 @@ private:
     }
 };
 
+// ─── Worker thread: does all the heavy lifting off the RT path ─────────────
+
+static void pitchWorkerLoop(SampleRing* ring, PitchProcessor* processor,
+                             UdpSender* udp, const Config* cfg, sem_t* dataReady) {
+    uint64_t nextHopEnd = static_cast<uint64_t>(cfg->winSize);
+    uint8_t oscBuf[256];
+
+    while (g_running.load(std::memory_order_relaxed)) {
+        sem_wait(dataReady);
+
+        uint64_t avail = ring->writeIndex();
+        while (nextHopEnd <= avail && g_running.load(std::memory_order_relaxed)) {
+            processor->analysisHopFromRing(*ring, nextHopEnd, [&](float freq, float conf) {
+                if (conf >= cfg->confThresh) {
+                    int len = osc::buildFloatMsg(oscBuf, sizeof(oscBuf), "/pitchfreq", freq);
+                    udp->send(oscBuf, len);
+                    len = osc::buildFloatMsg(oscBuf, sizeof(oscBuf), "/pitchconf", conf);
+                    udp->send(oscBuf, len);
+                }
+            });
+            nextHopEnd += static_cast<uint64_t>(cfg->hopSize);
+        }
+    }
+}
+
 // ─── JACK state (shared between callback and main) ───────────────────────────
+// Deliberately minimal: the RT callback only needs the ring buffer and the
+// semaphore. No processor, no UDP socket, no OSC buffer in the RT path.
 
 struct JackState {
-    jack_client_t*  client{nullptr};
-    jack_port_t*    inPort{nullptr};
-    PitchProcessor* processor{nullptr};
-    UdpSender*      udp{nullptr};
-    Config*         cfg{nullptr};
-    uint8_t         oscBuf[256]{};
-    unsigned        sampleRate{0};
+    jack_client_t* client{nullptr};
+    jack_port_t*   inPort{nullptr};
+    SampleRing*    ring{nullptr};
+    sem_t*         dataReady{nullptr};
 };
 
 static int jackProcess(jack_nframes_t nframes, void* arg) {
@@ -236,17 +292,9 @@ static int jackProcess(jack_nframes_t nframes, void* arg) {
     const float* in = static_cast<const float*>(
         jack_port_get_buffer(s->inPort, nframes));
 
-    s->processor->process(in, static_cast<int>(nframes), [&](float freq, float conf) {
-        if (conf >= s->cfg->confThresh) {
-            int len;
-            len = osc::buildFloatMsg(s->oscBuf, sizeof(s->oscBuf),
-                                     "/pitchfreq", freq);
-            s->udp->send(s->oscBuf, len);
-            len = osc::buildFloatMsg(s->oscBuf, sizeof(s->oscBuf),
-                                     "/pitchconf", conf);
-            s->udp->send(s->oscBuf, len);
-        }
-    });
+    // Cheap, deterministic, no locks/syscalls/allocation: safe for the RT thread.
+    s->ring->push(in, static_cast<size_t>(nframes));
+    sem_post(s->dataReady);
     return 0;
 }
 
@@ -281,20 +329,29 @@ int main(int argc, char** argv) {
     unsigned sampleRate = jack_get_sample_rate(client);
     cfg.sampleRate = sampleRate; // propagate to processor
 
-    // --- Pitch processor ---
+    // --- Pitch processor (runs on the worker thread only) ---
     PitchProcessor processor;
     if (!processor.init(cfg)) {
         std::cerr << "PitchProcessor init failed" << std::endl;
         return 1;
     }
 
+    // --- Sample ring: generous headroom (~32x window) so the worker thread
+    //     can lag behind briefly under scheduling pressure without losing data.
+    SampleRing ring;
+    ring.init(cfg.winSize * 32);
+
+    sem_t dataReady;
+    sem_init(&dataReady, 0, 0);
+
+    // --- Worker thread: all FFT/pitch analysis + OSC sends happen here ---
+    std::thread worker(pitchWorkerLoop, &ring, &processor, &udp, &cfg, &dataReady);
+
     // --- JACK wiring ---
     JackState state;
     state.client    = client;
-    state.processor = &processor;
-    state.udp       = &udp;
-    state.cfg       = &cfg;
-    state.sampleRate = sampleRate;
+    state.ring      = &ring;
+    state.dataReady = &dataReady;
 
     state.inPort = jack_port_register(client, "in",
                                       JACK_DEFAULT_AUDIO_TYPE,
@@ -324,9 +381,15 @@ int main(int argc, char** argv) {
               << "' @ " << sampleRate << " Hz  →  OSC "
               << cfg.oscHost << ":" << cfg.oscPort << std::endl;
 
-    // Main thread just waits; audio processing happens in jackProcess()
+    // Main thread just waits; audio capture happens in jackProcess() (cheap),
+    // analysis + OSC happens in the worker thread (off the RT path).
     while (g_running.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Wake the worker so it notices g_running == false and exits.
+    sem_post(&dataReady);
+    worker.join();
+    sem_destroy(&dataReady);
 
     jack_deactivate(client);
     jack_client_close(client);
