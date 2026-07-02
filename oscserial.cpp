@@ -44,7 +44,7 @@ std::array<std::atomic<uint8_t>, 14> param_data;
 // --- OSC Callback Handler ---
 int generic_handler(const char* /*path*/, const char* /*types*/,
                     lo_arg** argv, int /*argc*/,
-                    void* /*data*/, void* user_data)
+                    lo_message /*data*/, void* user_data)
 {
     int index = static_cast<int>(reinterpret_cast<intptr_t>(user_data));
     if (index >= 0 && index < 14) {
