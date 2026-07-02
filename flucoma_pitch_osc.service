@@ -9,5 +9,11 @@ Restart=always
 RestartSec=5
 User=pi
 
+# systemd services bypass PAM, so the audio group's rtprio/memlock
+# limits in /etc/security/limits.d never apply here. Grant the same
+# privileges directly so JACK can get real-time scheduling.
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+
 [Install]
 WantedBy=multi-user.target
