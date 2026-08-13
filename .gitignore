@@ -2,3 +2,5 @@
 gamepad
 oscserial
 fluid_pitch/build
+playback/osc-jack-play
+playback/*.wav

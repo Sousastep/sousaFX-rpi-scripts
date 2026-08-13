@@ -1,0 +1,16 @@
+[Unit]
+Description=OSC-triggered JACK wav player
+After=network.target jack.service sound.target
+
+[Service]
+# Adjust the paths to where you saved the compiled binary and wav files.
+# %%d is the systemd-escaped form of %d in the JACK_PLAY_CONNECT_TO pattern.
+# Add --no-register if you do not want the RNBO listener registration.
+ExecStart=/home/pi/sousaFX-rpi-scripts/rpi_playback/osc-jack-play -c 'system:playback_%%d' /home/pi/sousaFX-rpi-scripts/rpi_playback/sound1.wav /home/pi/sousaFX-rpi-scripts/rpi_playback/sound2.wav /home/pi/sousaFX-rpi-scripts/rpi_playback/sound3.wav /home/pi/sousaFX-rpi-scripts/rpi_playback/sound4.wav
+WorkingDirectory=/home/pi/sousaFX-rpi-scripts/rpi_playback/
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
