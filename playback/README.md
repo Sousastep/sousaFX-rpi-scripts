@@ -1,5 +1,7 @@
 # osc-jack-play
 
+--- vibecoded with freebuff ---
+
 A small C client for a Raspberry Pi (raspios trixie, e.g. the
 `rnbooscquery` image) that plays WAV files through `jack-play(1)` whenever it
 receives an OSC message.
