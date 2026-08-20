@@ -9,6 +9,7 @@ receives an OSC message.
 ```
 /play <index>   →  spawns  jack-play <wavfile[i]>   (ignored if already playing)
 /stop           →  stops the current jack-play
+<status>        →  outbound: 1 when playback starts, 0 when it stops
 ```
 
 `jack-play` comes from the Debian `jack-tools` package. It is a lightweight
@@ -96,6 +97,9 @@ is started before the client and that `jack-play` can connect.
 * Indices are **0-based** (`/play 0` .. `/play 3`); pass `-1` for 1-based.
 * While a file is playing, new `/play` messages are **ignored** (logged).
 * `jack-play` can read any format libsndfile supports (wav, flac, ogg, aiff).
+* Playback status is sent back over OSC to the RNBO oscquery service
+  (`--rnbo-host` / `--rnbo-port`): an int `1` when a file starts and `0` when
+  it stops, on the address given by `--status-address` (default `/playing`).
 
 ## Trigger from RNBO (rnbooscquery image)
 
@@ -179,5 +183,6 @@ Note: registration with RNBO happens once at startup, so start RNBO before
                           (default 127.0.0.1; set to this Pi's IP if RNBO
                           runs on another machine)
     --no-register         do not register as an RNBO listener
+    --status-address PATH OSC path for playback status (default /playing)
 -h, --help                show help
 ```

@@ -11,6 +11,10 @@
  *                   ignored if a file is already playing
  *   /stop           stop the current playback (SIGTERM to jack-play)
  *
+ * Playback status is sent back over OSC to the RNBO oscquery service:
+ *   <status-address>  1 when a file starts playing, 0 when it stops
+ *                     (default address /playing, see --status-address)
+ *
  * The wav files are given as positional arguments; /play <index> selects
  * the index-th file.  <index> may arrive as an OSC int ('i') or float ('f').
  *
@@ -59,6 +63,7 @@ static const char *g_rnbo_host = "127.0.0.1";   /* RNBO oscquery host */
 static const char *g_rnbo_port = "1234";        /* RNBO oscquery port */
 static const char *g_advertise_host = "127.0.0.1"; /* host in listener addr */
 static int g_register = 1;                      /* register as RNBO listener */
+static const char *g_status_path = "/playing";  /* OSC path for playback status */
 
 /* ------------------------------------------------------------------ */
 /* small helpers                                                      */
@@ -86,11 +91,17 @@ static void usage(const char *prog)
         "                         (default 127.0.0.1; set to this Pi's IP if\n"
         "                         RNBO runs on another machine)\n"
         "      --no-register      do not register as an RNBO listener\n"
+        "      --status-address PATH\n"
+        "                         OSC path for playback status (default\n"
+        "                         /playing; sent as int 1=started, 0=stopped)\n"
         "  -h, --help             show this help\n"
         "\n"
         "OSC messages:\n"
         "  /play <i>   play wavfile[i] (ignored while another file is playing)\n"
         "  /stop       stop current playback\n"
+        "\n"
+        "Sent back over OSC (to the RNBO oscquery service):\n"
+        "  <status-address> 1 when playback starts, 0 when it stops\n"
         "\n"
         "RNBO: on startup the client sends '/rnbo/listeners/add <host:port>'\n"
         "to the RNBO oscquery service so RNBO streams its OSC output here.\n"
@@ -161,6 +172,23 @@ static void rnbo_listener_update(lo_server server, int add)
         fflush(stdout);
     }
     lo_address_free(rnbo);
+}
+
+/* Send playback status (1 = started, 0 = stopped) back over OSC to the
+ * RNBO oscquery service. */
+static void send_playback_status(int playing)
+{
+    lo_address target = lo_address_new(g_rnbo_host, g_rnbo_port);
+    if (target == NULL) {
+        fprintf(stderr, "warning: could not create OSC address %s:%s\n",
+                g_rnbo_host, g_rnbo_port);
+        return;
+    }
+    if (lo_send(target, g_status_path, "i", playing) < 0) {
+        fprintf(stderr, "warning: OSC status send to %s:%s failed: %s\n",
+                g_rnbo_host, g_rnbo_port, lo_address_errstr(target));
+    }
+    lo_address_free(target);
 }
 
 /* ------------------------------------------------------------------ */
@@ -262,6 +290,7 @@ static int play_handler(const char *path, const char *types, lo_arg **argv,
     g_child_pid = pid;
     fprintf(stderr, "/play %d: starting jack-play with %s (pid %ld)\n",
             idx, g_files[idx], (long)pid);
+    send_playback_status(1);
     return 0;
 }
 
@@ -339,6 +368,7 @@ int main(int argc, char **argv)
         { "rnbo-host",      required_argument, NULL, 256 },
         { "advertise-host", required_argument, NULL, 257 },
         { "no-register",    no_argument,       NULL, 258 },
+        { "status-address", required_argument, NULL, 259 },
         { "help",           no_argument,       NULL, 'h' },
         { NULL, 0, NULL, 0 }
     };
@@ -353,6 +383,7 @@ int main(int argc, char **argv)
         case 256: g_rnbo_host = optarg; break;
         case 257: g_advertise_host = optarg; break;
         case 258: g_register = 0; break;
+        case 259: g_status_path = optarg; break;
         case 'h': usage(argv[0]); return 0;
         default:  usage(argv[0]); return 1;
         }
@@ -393,6 +424,8 @@ int main(int argc, char **argv)
         printf("  [%d] %s\n", g_one_based ? i + 1 : i, g_files[i]);
     printf("osc-jack-play: send /play <index> to start playback "
            "(ignored while playing), /stop to stop\n");
+    printf("osc-jack-play: sending status '%s' (1=started, 0=stopped) to %s:%s\n",
+           g_status_path, g_rnbo_host, g_rnbo_port);
     fflush(stdout);
 
     while (g_running) {
@@ -406,6 +439,7 @@ int main(int argc, char **argv)
             else if (WIFSIGNALED(status))
                 fprintf(stderr, "playback terminated (signal %d)\n",
                         WTERMSIG(status));
+            send_playback_status(0);
         }
     }
 
@@ -417,6 +451,7 @@ int main(int argc, char **argv)
             usleep(100000);
         if (g_busy && g_child_pid > 0)
             kill(g_child_pid, SIGKILL);
+        send_playback_status(0);
     }
     if (g_register)
         rnbo_listener_update(server, 0);
