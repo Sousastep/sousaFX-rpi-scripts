@@ -8,7 +8,7 @@ Environment=XDG_RUNTIME_DIR=/run/user/1000
 # %%d is the systemd-escaped form of %d in the JACK_PLAY_CONNECT_TO pattern.
 # Add --no-register if you do not want the RNBO listener registration.
 # SousaFX-rnbo-2:in%%d
-ExecStart=/home/pi/sousaFX-rpi-scripts/playback/osc-jack-play -c 'SousaFX-rnbo-2:in%%d' /home/pi/sousaFX-rpi-scripts/playback/sound0.wav /home/pi/sousaFX-rpi-scripts/playback/sound1.wav /home/pi/sousaFX-rpi-scripts/playback/sound2.wav /home/pi/sousaFX-rpi-scripts/playback/sound3.wav /home/pi/sousaFX-rpi-scripts/playback/sound4.wav /home/pi/sousaFX-rpi-scripts/playback/sound5.wav /home/pi/sousaFX-rpi-scripts/playback/sound6.wav
+ExecStart=/home/pi/sousaFX-rpi-scripts/playback/osc-jack-play -c 'SousaFX-rnbo-0:in%%d' /home/pi/sousaFX-rpi-scripts/playback/sound0.wav /home/pi/sousaFX-rpi-scripts/playback/sound1.wav /home/pi/sousaFX-rpi-scripts/playback/sound2.wav /home/pi/sousaFX-rpi-scripts/playback/sound3.wav /home/pi/sousaFX-rpi-scripts/playback/sound4.wav /home/pi/sousaFX-rpi-scripts/playback/sound5.wav /home/pi/sousaFX-rpi-scripts/playback/sound6.wav
 WorkingDirectory=/home/pi/sousaFX-rpi-scripts/playback/
 Restart=always
 RestartSec=5
