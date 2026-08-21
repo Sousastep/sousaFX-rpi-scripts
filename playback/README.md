@@ -8,7 +8,7 @@ receives an OSC message.
 
 ```
 /play <index>   →  spawns  jack-play <wavfile[i]>   (ignored if already playing)
-/stop           →  stops the current jack-play
+/stop 1         →  stops the current jack-play
 <status>        →  outbound: 1 when playback starts, 0 when it stops
 ```
 
@@ -119,7 +119,7 @@ client's port, and `osc-jack-play` reacts to:
 ```
 /play 0     (or /play 1 with the -1 option)
 /play 3
-/stop
+/stop 1
 ```
 
 Both int and float arguments are accepted. The RNBO host/port and the
