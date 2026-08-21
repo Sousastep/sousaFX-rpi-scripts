@@ -1,16 +1,23 @@
 [Unit]
 Description=OSC-triggered JACK wav player
-After=network.target jack.service sound.target
+After=network.target sound.target
 
 [Service]
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 # Adjust the paths to where you saved the compiled binary and wav files.
 # %%d is the systemd-escaped form of %d in the JACK_PLAY_CONNECT_TO pattern.
 # Add --no-register if you do not want the RNBO listener registration.
-ExecStart=/home/pi/sousaFX-rpi-scripts/rpi_playback/osc-jack-play -c 'system:playback_%%d' /home/pi/sousaFX-rpi-scripts/rpi_playback/sound1.wav /home/pi/sousaFX-rpi-scripts/rpi_playback/sound2.wav /home/pi/sousaFX-rpi-scripts/rpi_playback/sound3.wav /home/pi/sousaFX-rpi-scripts/rpi_playback/sound4.wav
-WorkingDirectory=/home/pi/sousaFX-rpi-scripts/rpi_playback/
+# SousaFX-rnbo-2:in%%d
+ExecStart=/home/pi/sousaFX-rpi-scripts/playback/osc-jack-play -c 'SousaFX-rnbo-2:in%%d' /home/pi/sousaFX-rpi-scripts/playback/sound0.wav /home/pi/sousaFX-rpi-scripts/playback/sound1.wav /home/pi/sousaFX-rpi-scripts/playback/sound2.wav /home/pi/sousaFX-rpi-scripts/playback/sound3.wav /home/pi/sousaFX-rpi-scripts/playback/sound4.wav /home/pi/sousaFX-rpi-scripts/playback/sound5.wav /home/pi/sousaFX-rpi-scripts/playback/sound6.wav
+WorkingDirectory=/home/pi/sousaFX-rpi-scripts/playback/
 Restart=always
 RestartSec=5
-User=root
+User=pi
+# systemd services bypass PAM, so the audio group's rtprio/memlock
+# limits in /etc/security/limits.d never apply here. Grant memlock
+# directly so the jack-play subprocess can map JACK's shared memory.
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
 
 [Install]
 WantedBy=multi-user.target

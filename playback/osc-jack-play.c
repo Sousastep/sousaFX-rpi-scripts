@@ -9,7 +9,7 @@
  *   /play <index>   start playing wav file <index>
  *                   (0-based by default, see -1 for 1-based)
  *                   ignored if a file is already playing
- *   /stop           stop the current playback (SIGTERM to jack-play)
+ *   /stop 1         stop the current playback (SIGTERM to jack-play)
  *
  * Playback status is sent back over OSC to the RNBO oscquery service:
  *   <status-address>  1 when a file starts playing, 0 when it stops
@@ -98,7 +98,7 @@ static void usage(const char *prog)
         "\n"
         "OSC messages:\n"
         "  /play <i>   play wavfile[i] (ignored while another file is playing)\n"
-        "  /stop       stop current playback\n"
+        "  /stop 1     stop current playback\n"
         "\n"
         "Sent back over OSC (to the RNBO oscquery service):\n"
         "  <status-address> 1 when playback starts, 0 when it stops\n"
@@ -298,11 +298,23 @@ static int stop_handler(const char *path, const char *types, lo_arg **argv,
                         int argc, lo_message msg, void *user_data)
 {
     (void)path;
-    (void)types;
-    (void)argv;
-    (void)argc;
     (void)msg;
     (void)user_data;
+
+    /* Only act on /stop 1 (int or float); ignore bare /stop, /stop 0, etc. */
+    if (argc < 1)
+        return 0;
+
+    double val;
+    if (types[0] == 'i')
+        val = (double)argv[0]->i;
+    else if (types[0] == 'f')
+        val = (double)argv[0]->f;
+    else
+        return 0;
+
+    if (val != 1)
+        return 0;
 
     if (g_busy && g_child_pid > 0) {
         kill(g_child_pid, SIGTERM);
@@ -409,7 +421,7 @@ int main(int argc, char **argv)
     }
     lo_server_add_method(server, "/play", "i", play_handler, NULL);
     lo_server_add_method(server, "/play", "f", play_handler, NULL);
-    lo_server_add_method(server, "/stop", "", stop_handler, NULL);
+    lo_server_add_method(server, "/stop", NULL, stop_handler, NULL);
     lo_server_add_method(server, "/rnbo/listeners/add", NULL,
                          rnbo_reply_handler, NULL);
     lo_server_add_method(server, "/rnbo/listeners/remove", NULL,
@@ -423,7 +435,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < g_nfiles; i++)
         printf("  [%d] %s\n", g_one_based ? i + 1 : i, g_files[i]);
     printf("osc-jack-play: send /play <index> to start playback "
-           "(ignored while playing), /stop to stop\n");
+           "(ignored while playing), /stop 1 to stop\n");
     printf("osc-jack-play: sending status '%s' (1=started, 0=stopped) to %s:%s\n",
            g_status_path, g_rnbo_host, g_rnbo_port);
     fflush(stdout);
