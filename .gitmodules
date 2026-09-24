@@ -1,0 +1,3 @@
+[submodule "osc-jack-play"]
+	path = osc-jack-play
+	url = https://github.com/Sousastep/osc-jack-play.git
