@@ -5,7 +5,8 @@
 
 #include <iostream>
 #include <string>
-#include <unordered_map>
+#include <array>
+#include <algorithm>
 #include <fcntl.h>
 #include <unistd.h>
 #include <poll.h>
@@ -17,42 +18,92 @@
 #include <cstring>
 
 namespace fs = std::filesystem;
+using Clock = std::chrono::steady_clock;
 
 // --- Configuration ---
 const char*       OSC_HOST            = nullptr;  // nullptr = localhost
 const char*       OSC_PORT            = "1234";
 const std::string TARGET_NAME         = "Xbox Wireless Controller";
 const std::string BASE_PATH           = "/";
-const int         HEARTBEAT_INTERVAL_S = 180;
-const int         RUMBLE_DURATION_MS   = 200;
-const int         RECONNECT_DELAY_S    = 3;
-const int         POLL_TIMEOUT_MS      = 50;
-const int         OSC_THROTTLE_MS      = 8;
+const auto        HEARTBEAT_INTERVAL  = std::chrono::seconds(180);
+const int         RUMBLE_DURATION_MS  = 200;
+const int         RECONNECT_DELAY_S   = 3;
+const auto        OSC_THROTTLE        = std::chrono::milliseconds(8);
 
 // --- Clean shutdown via SIGINT / SIGTERM ---
 static volatile sig_atomic_t g_running = 1;
 static void on_signal(int) { g_running = 0; }
 
-// Maps evdev codes to precomputed OSC address strings.
-const std::unordered_map<int, std::string> EVENT_MAP = {
-    {ABS_X,      BASE_PATH + "ABS_X"},
-    {ABS_Y,      BASE_PATH + "ABS_Y"},
-    {ABS_Z,      BASE_PATH + "ABS_Z"},
-    {ABS_RZ,     BASE_PATH + "ABS_RZ"},
-    {ABS_BRAKE,  BASE_PATH + "ABS_BRAKE"},
-    {ABS_GAS,    BASE_PATH + "ABS_GAS"},
-    {ABS_HAT0X,  BASE_PATH + "ABS_HAT0X"},
-    {ABS_HAT0Y,  BASE_PATH + "ABS_HAT0Y"},
-    {BTN_TL,     BASE_PATH + "BTN_TL"},
-    {BTN_TR,     BASE_PATH + "BTN_TR"},
-    {BTN_SELECT, BASE_PATH + "BTN_SELECT"},
-    {BTN_START,  BASE_PATH + "BTN_START"},
-    {BTN_EAST,   BASE_PATH + "BTN_EAST"},
-    {BTN_SOUTH,  BASE_PATH + "BTN_SOUTH"},
-    {BTN_THUMBL, BASE_PATH + "BTN_THUMBL"},
-    {BTN_THUMBR, BASE_PATH + "BTN_THUMBR"},
-    {BTN_WEST,   BASE_PATH + "BTN_NORTH"}, // Physical N is reported as BTN_WEST
-    {BTN_NORTH,  BASE_PATH + "BTN_WEST"},  // Physical W is reported as BTN_NORTH
+// Evdev events forwarded over OSC, with the address name each is sent to.
+struct Route {
+    __u16       type;
+    __u16       code;
+    const char* name;
+};
+
+const Route ROUTES[] = {
+    {EV_ABS, ABS_X,      "ABS_X"},
+    {EV_ABS, ABS_Y,      "ABS_Y"},
+    {EV_ABS, ABS_Z,      "ABS_Z"},
+    {EV_ABS, ABS_RZ,     "ABS_RZ"},
+    {EV_ABS, ABS_BRAKE,  "ABS_BRAKE"},
+    {EV_ABS, ABS_GAS,    "ABS_GAS"},
+    {EV_ABS, ABS_HAT0X,  "ABS_HAT0X"},
+    {EV_ABS, ABS_HAT0Y,  "ABS_HAT0Y"},
+    {EV_KEY, BTN_TL,     "BTN_TL"},
+    {EV_KEY, BTN_TR,     "BTN_TR"},
+    {EV_KEY, BTN_SELECT, "BTN_SELECT"},
+    {EV_KEY, BTN_START,  "BTN_START"},
+    {EV_KEY, BTN_EAST,   "BTN_EAST"},
+    {EV_KEY, BTN_SOUTH,  "BTN_SOUTH"},
+    {EV_KEY, BTN_THUMBL, "BTN_THUMBL"},
+    {EV_KEY, BTN_THUMBR, "BTN_THUMBR"},
+    {EV_KEY, BTN_WEST,   "BTN_NORTH"}, // Physical N is reported as BTN_WEST
+    {EV_KEY, BTN_NORTH,  "BTN_WEST"},  // Physical W is reported as BTN_NORTH
+};
+
+// Precomputed OSC addresses indexed directly by evdev code, so each event is
+// a single array lookup. An empty string means the code isn't forwarded.
+std::array<std::string, ABS_CNT> ABS_ADDR;
+std::array<std::string, KEY_CNT> KEY_ADDR;
+
+void build_address_tables() {
+    for (const auto& r : ROUTES) {
+        auto& addr = (r.type == EV_ABS) ? ABS_ADDR[r.code] : KEY_ADDR[r.code];
+        addr = BASE_PATH + r.name;
+    }
+}
+
+// Latest value per evdev code, waiting to be sent. Fixed-size storage plus a
+// list of the codes that changed, so queueing and flushing never allocate and
+// flushing only visits the codes that actually changed.
+template <size_t N>
+struct PendingValues {
+    std::array<int, N>   value{};
+    std::array<bool, N>  queued{};
+    std::array<__u16, N> order{};
+    size_t               count = 0;
+
+    bool empty() const { return count == 0; }
+
+    // Overwrites any stale value already queued for this code.
+    void set(__u16 code, int v) {
+        value[code] = v;
+        if (!queued[code]) {
+            queued[code]   = true;
+            order[count++] = code;
+        }
+    }
+
+    template <typename Fn>
+    void flush(Fn&& send) {
+        for (size_t i = 0; i < count; ++i) {
+            const __u16 code = order[i];
+            queued[code] = false;
+            send(code, value[code]);
+        }
+        count = 0;
+    }
 };
 
 // Scans /dev/input for a device whose name contains TARGET_NAME.
@@ -109,14 +160,23 @@ int main() {
     signal(SIGINT,  on_signal);
     signal(SIGTERM, on_signal);
 
+    build_address_tables();
+
     lo_address target = lo_address_new(OSC_HOST, OSC_PORT);
     if (!target) {
         std::cerr << "Failed to create OSC address on port " << OSC_PORT << std::endl;
         return 1;
     }
 
-    auto last_heartbeat = std::chrono::steady_clock::now();
-    auto last_flush     = std::chrono::steady_clock::now();
+    auto send = [target](const std::string& addr, int value) {
+        if (lo_send(target, addr.c_str(), "i", value) < 0)
+            std::cerr << "OSC send failed: " << lo_address_errstr(target) << std::endl;
+    };
+    auto send_axis   = [&](__u16 code, int value) { send(ABS_ADDR[code], value); };
+    auto send_button = [&](__u16 code, int value) { send(KEY_ADDR[code], value); };
+
+    auto last_heartbeat = Clock::now();
+    auto last_flush     = Clock::now();
 
     while (g_running) {
         // --- Device discovery ---
@@ -138,7 +198,7 @@ int main() {
         // --- Rumble state (managed non-blocking across loop iterations) ---
         int     rumble_id = -1;
         bool    rumbling  = false;
-        std::chrono::steady_clock::time_point rumble_stop;
+        Clock::time_point rumble_stop;
 
         // --- Event loop ---
         struct pollfd pfd = {};
@@ -147,16 +207,26 @@ int main() {
 
         // Axes (EV_ABS) are throttled: intermediate values are overwritten so only
         // the most recent position is sent per flush interval. This prevents flooding
-        // the OSC receiver when multiple axes move simultaneously.
+        // the OSC receiver when multiple axes move simultaneously. Axes still queued
+        // when the interval ends are flushed by the poll() timeout, so a final
+        // resting position is never held back waiting for the next input event.
         //
         // Buttons (EV_KEY) are never throttled: every press and release is a discrete
         // edge event that must be delivered immediately on SYN_REPORT regardless of
         // whether the axis throttle interval has elapsed.
-        std::unordered_map<int, int> pending_axes;
-        std::unordered_map<int, int> pending_buttons;
+        PendingValues<ABS_CNT> pending_axes;
+        PendingValues<KEY_CNT> pending_buttons;
+
+        bool read_failed = false;
 
         while (g_running) {
-            auto now = std::chrono::steady_clock::now();
+            auto now = Clock::now();
+
+            // Flush axes whose throttle interval has elapsed
+            if (!pending_axes.empty() && now - last_flush >= OSC_THROTTLE) {
+                pending_axes.flush(send_axis);
+                last_flush = now;
+            }
 
             // Stop rumble once its duration has elapsed
             if (rumbling && now >= rumble_stop) {
@@ -166,10 +236,7 @@ int main() {
             }
 
             // Fire heartbeat rumble on schedule
-            if (!rumbling &&
-                std::chrono::duration_cast<std::chrono::seconds>(
-                    now - last_heartbeat).count() >= HEARTBEAT_INTERVAL_S)
-            {
+            if (!rumbling && now - last_heartbeat >= HEARTBEAT_INTERVAL) {
                 rumble_id = start_rumble(fd);
                 if (rumble_id >= 0) {
                     rumbling    = true;
@@ -178,10 +245,15 @@ int main() {
                 last_heartbeat = now;
             }
 
-            // Block until input arrives or timeout expires.
-            // The short timeout keeps rumble/heartbeat bookkeeping responsive
-            // without burning CPU when the controller is idle.
-            const int ret = poll(&pfd, 1, POLL_TIMEOUT_MS);
+            // Sleep until input arrives or the next timed task is due, so an
+            // idle controller costs no wakeups beyond the heartbeat.
+            auto deadline = rumbling ? rumble_stop : last_heartbeat + HEARTBEAT_INTERVAL;
+            if (!pending_axes.empty())
+                deadline = std::min(deadline, last_flush + OSC_THROTTLE);
+            const int timeout_ms = static_cast<int>(std::max<long long>(0,
+                std::chrono::ceil<std::chrono::milliseconds>(deadline - now).count()));
+
+            const int ret = poll(&pfd, 1, timeout_ms);
             if (ret < 0) {
                 if (errno == EINTR) continue;  // Signal interrupted; re-check g_running
                 std::cerr << "poll() error: " << strerror(errno) << std::endl;
@@ -194,47 +266,47 @@ int main() {
                 break;
             }
 
-            // Drain all queued events in one go
-            struct input_event ev;
-            ssize_t nread;
-            while ((nread = read(fd, &ev, sizeof(ev))) > 0) {
-                if (ev.type == EV_ABS) {
-                    // Axis: accumulate, overwriting stale intermediate values.
-                    if (EVENT_MAP.count(ev.code))
-                        pending_axes[ev.code] = ev.value;
-                } else if (ev.type == EV_KEY) {
-                    // Button: accumulate separately; never dropped by the throttle.
-                    if (EVENT_MAP.count(ev.code))
-                        pending_buttons[ev.code] = ev.value;
-                } else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
-                    auto syn_now = std::chrono::steady_clock::now();
-                    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        syn_now - last_flush).count();
-
-                    // Always flush buttons immediately — every edge must be delivered.
-                    for (const auto& [code, value] : pending_buttons) {
-                        const std::string& addr = EVENT_MAP.at(code);
-                        if (lo_send(target, addr.c_str(), "i", value) < 0)
-                            std::cerr << "OSC send failed: " << lo_address_errstr(target) << std::endl;
+            // Drain all queued events, many per read() call
+            struct input_event evs[64];
+            for (;;) {
+                const ssize_t nread = read(fd, evs, sizeof(evs));
+                if (nread < 0) {
+                    if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                        std::cerr << "Read error: " << strerror(errno) << std::endl;
+                        read_failed = true;
                     }
-                    pending_buttons.clear();
+                    break;
+                }
 
-                    // Flush axes only once OSC_THROTTLE_MS has elapsed.
-                    if (!pending_axes.empty() && elapsed >= OSC_THROTTLE_MS) {
-                        for (const auto& [code, value] : pending_axes) {
-                            const std::string& addr = EVENT_MAP.at(code);
-                            if (lo_send(target, addr.c_str(), "i", value) < 0)
-                                std::cerr << "OSC send failed: " << lo_address_errstr(target) << std::endl;
+                const size_t n = static_cast<size_t>(nread) / sizeof(input_event);
+                for (size_t i = 0; i < n; ++i) {
+                    const input_event& ev = evs[i];
+                    if (ev.type == EV_ABS) {
+                        // Axis: accumulate, overwriting stale intermediate values.
+                        if (ev.code < ABS_CNT && !ABS_ADDR[ev.code].empty())
+                            pending_axes.set(ev.code, ev.value);
+                    } else if (ev.type == EV_KEY) {
+                        // Button: accumulate separately; never dropped by the throttle.
+                        if (ev.code < KEY_CNT && !KEY_ADDR[ev.code].empty())
+                            pending_buttons.set(ev.code, ev.value);
+                    } else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
+                        // Always flush buttons immediately — every edge must be delivered.
+                        pending_buttons.flush(send_button);
+
+                        // Flush axes only once OSC_THROTTLE has elapsed.
+                        const auto syn_now = Clock::now();
+                        if (!pending_axes.empty() && syn_now - last_flush >= OSC_THROTTLE) {
+                            pending_axes.flush(send_axis);
+                            last_flush = syn_now;
                         }
-                        pending_axes.clear();
-                        last_flush = syn_now;
                     }
                 }
+
+                // A short read means the kernel buffer is empty; skip the
+                // extra read() that would only return EAGAIN.
+                if (nread < static_cast<ssize_t>(sizeof(evs))) break;
             }
-            if (nread < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                std::cerr << "Read error: " << strerror(errno) << std::endl;
-                break;
-            }
+            if (read_failed) break;
         }
 
         // Clean up before attempting reconnect

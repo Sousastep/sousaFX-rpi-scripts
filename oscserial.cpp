@@ -1,10 +1,7 @@
 #include <iostream>
-#include <vector>
-#include <string>
+#include <iterator>     // std::size
 #include <chrono>
 #include <thread>
-#include <atomic>
-#include <array>
 #include <cstring>
 #include <fcntl.h>
 #include <termios.h>
@@ -24,22 +21,24 @@ static constexpr int WRITE_ERR_REPORT_INTERVAL = 260;
 
 struct ParamConfig {
     int         index;
-    std::string route;
+    const char* route;
 };
 
-const std::vector<ParamConfig> PARAMS = {
+// constexpr (rather than std::vector) so NUM_PARAMS is a compile-time
+// constant and can size the stack buffers below.
+constexpr ParamConfig PARAMS[] = {
     {0,  "/brightness"}, {1,  "/radius"},    {2,  "/palette"},
     {3,  "/divisionsHi"},{4,  "/divisionsLo"},{5,  "/width"},
     {6,  "/curve"},      {7,  "/rotation"},   {8,  "/fadeIn"},
     {9,  "/fadeOut"},    {10, "/peakPosition"},{11, "/pattern"},
     {12, "/gradientOffset"},{13, "/maskType"}
 };
+constexpr size_t NUM_PARAMS = std::size(PARAMS);
 
 // --- Global State ---
-// Each element explicitly value-initialised to 0 for portability across
-// C++17 and C++20 (aggregate initialisation of atomics was underspecified
-// in C++17).
-std::array<std::atomic<uint8_t>, 14> param_data;
+// Written by generic_handler and read by the frame loop, both on the main
+// thread, so no atomics are needed.
+uint8_t param_data[NUM_PARAMS] = {};
 
 // --- OSC Callback Handler ---
 int generic_handler(const char* /*path*/, const char* /*types*/,
@@ -47,9 +46,8 @@ int generic_handler(const char* /*path*/, const char* /*types*/,
                     lo_message /*data*/, void* user_data)
 {
     int index = static_cast<int>(reinterpret_cast<intptr_t>(user_data));
-    if (index >= 0 && index < 14) {
-        param_data[index].store(static_cast<uint8_t>(argv[0]->i),
-                                std::memory_order_relaxed);
+    if (index >= 0 && index < static_cast<int>(NUM_PARAMS)) {
+        param_data[index] = static_cast<uint8_t>(argv[0]->i);
     }
     return 0;
 }
@@ -58,6 +56,34 @@ void error(int num, const char* msg, const char* path) {
     std::cerr << "Liblo Server Error " << num
               << " in " << (path ? path : "unknown")
               << ": " << msg << "\n";
+}
+
+// --- COBS Encoding ---
+// Consistent Overhead Byte Stuffing: encodes `len` bytes of `src` into `dst`
+// so the output contains no 0x00 bytes, allowing 0x00 to serve as an
+// unambiguous frame delimiter. `dst` must hold at least len + len/254 + 1
+// bytes. Returns the encoded length (excluding the trailing delimiter).
+static size_t cobs_encode(const uint8_t* src, size_t len, uint8_t* dst) {
+    size_t  code_idx = 0;   // position of the current block's code byte
+    size_t  out      = 1;
+    uint8_t code     = 1;
+
+    for (size_t i = 0; i < len; ++i) {
+        if (src[i] == 0) {
+            dst[code_idx] = code;
+            code_idx = out++;
+            code = 1;
+        } else {
+            dst[out++] = src[i];
+            if (++code == 0xFF) {
+                dst[code_idx] = code;
+                code_idx = out++;
+                code = 1;
+            }
+        }
+    }
+    dst[code_idx] = code;
+    return out;
 }
 
 // --- Serial Setup ---
@@ -110,9 +136,6 @@ static void configure_realtime_thread() {
 }
 
 int main() {
-    // Explicitly zero-initialise all atomics.
-    for (auto& a : param_data) a.store(0, std::memory_order_relaxed);
-
     // 1. Setup Serial
     int serial_fd = setup_serial(SERIAL_PORT);
     if (serial_fd < 0) {
@@ -121,8 +144,11 @@ int main() {
     }
     std::cout << "Connected to Serial: " << SERIAL_PORT << "\n";
 
-    // 2. Setup OSC Server Thread
-    lo_server_thread st = lo_server_thread_new("4321", error);
+    // 2. Setup OSC Server
+    // No server thread: the frame loop drains the socket itself just before
+    // each send. Values only leave once per frame anyway, so this adds no
+    // latency and avoids a thread wakeup for every incoming packet.
+    lo_server st = lo_server_new("4321", error);
     if (!st) {
         std::cerr << "Could not start OSC server on port 4321\n";
         close(serial_fd);
@@ -131,13 +157,12 @@ int main() {
 
     // 3. Register Parameters
     for (const auto& p : PARAMS) {
-        lo_server_thread_add_method(st, p.route.c_str(), "i",
-                                    generic_handler,
-                                    reinterpret_cast<void*>(
-                                        static_cast<intptr_t>(p.index)));
+        lo_server_add_method(st, p.route, "i",
+                             generic_handler,
+                             reinterpret_cast<void*>(
+                                 static_cast<intptr_t>(p.index)));
     }
 
-    lo_server_thread_start(st);
     std::cout << "OSC server started on port 4321\n";
 
     // 4. Register with RNBO
@@ -148,10 +173,9 @@ int main() {
     // 5. Elevate main thread priority & pin to a core
     configure_realtime_thread();
 
-    // 6. Transmission buffer — kept on the stack for cache locality
-    uint8_t tx_buffer[16];
-    tx_buffer[0]  = 254; // Start byte
-    tx_buffer[15] = 255; // End byte
+    // 6. Transmission buffer — kept on the stack for cache locality.
+    // COBS adds at most 1 byte per 254 (plus one), then one 0x00 delimiter.
+    uint8_t tx_buffer[NUM_PARAMS + NUM_PARAMS / 254 + 2];
 
     const auto frame_duration =
         std::chrono::nanoseconds(1'000'000'000 / FPS);
@@ -164,15 +188,16 @@ int main() {
     std::cout << "Entering main loop at " << FPS << " FPS...\n";
 
     while (true) {
-        // --- Snapshot all 14 atomics in one tight loop ---
-        // The compiler will typically unroll this at -O2/-O3.
-        for (int i = 0; i < 14; ++i) {
-            tx_buffer[i + 1] =
-                param_data[i].load(std::memory_order_relaxed);
-        }
+        // --- Apply every OSC message queued since the last frame ---
+        // Each call handles one message; 0 means the socket is empty.
+        while (lo_server_recv_noblock(st, 0) > 0) {}
+
+        // --- COBS-encode and append the 0x00 frame delimiter ---
+        size_t tx_len = cobs_encode(param_data, sizeof(param_data), tx_buffer);
+        tx_buffer[tx_len++] = 0x00;
 
         // --- Write to serial (non-blocking; EAGAIN is not an error) ---
-        if (write(serial_fd, tx_buffer, 16) < 0 && errno != EAGAIN) {
+        if (write(serial_fd, tx_buffer, tx_len) < 0 && errno != EAGAIN) {
             if (++write_err_count % WRITE_ERR_REPORT_INTERVAL == 0) {
                 std::cerr << "[warn] Serial write failed "
                           << write_err_count << " times\n";
@@ -192,7 +217,7 @@ int main() {
     }
 
     // Cleanup (unreachable in normal operation; here for correctness)
-    lo_server_thread_free(st);
+    lo_server_free(st);
     close(serial_fd);
     return 0;
 }
