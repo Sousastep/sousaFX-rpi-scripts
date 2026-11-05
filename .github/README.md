@@ -1,5 +1,6 @@
-about
-=====
+<a href="#studio_microphone-introduction">![rainbow](./media/rainbow.png)</a>
+
+# :studio_microphone: Introduction
 
 these scripts connect a gamepad to rnbo via bluetooth, and rnbo to the [teensy](https://github.com/Sousastep/sousaVFX-teensy) via usb serial, for use with [sousaFX-rnbo](https://github.com/Sousastep/SousaFX-rnbo)
 
@@ -343,3 +344,13 @@ Using the Zoom's headphone out to run the Minirig results in lackluster volume l
 
 Zoom's Dual 1/4" outputs, measured at +4 dBu, are ~3 dB quieter than the digital output, which is odd considering the 1/4" outputs should be -10 dBv.
 
+<a href="#house_with_garden-repositories">![rainbow](./media/rainbow.png)</a>
+
+# :house_with_garden: Repositories
+
+- [SousaFX-rnbo](https://github.com/Sousastep/SousaFX-rnbo):                audio effects
+- [SousaFX-rnbo-docs](https://github.com/Sousastep/SousaFX-rnbo-docs):      documentation
+- [sousaFX-rpi-scripts](https://github.com/Sousastep/sousaFX-rpi-scripts):  raspberry pi scripts
+- [sousaVFX-teensy](https://github.com/Sousastep/sousaVFX-teensy):          visual effects
+- [SousaPlayback-rnbo](https://github.com/Sousastep/SousaPlayback-rnbo):    ableton project
+- [sousa_fx_generator](https://github.com/Sousastep/sousa_fx_generator):    rnbo codebox~ generator
