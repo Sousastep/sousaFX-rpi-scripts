@@ -33,10 +33,11 @@ constexpr ParamConfig PARAMS[] = {
     {6,  "/rotation"},   {7,  "/fadeIn"},     {8,  "/fadeOut"},
     {9,  "/peakPosition"},{10, "/pattern"},   {11, "/gradientOffset"},
     {12, "/maskType"},
-    // Palette knobs, generated into OKLCH colors on the Teensy. They start at
-    // the Teensy's boot palette so the LEDs aren't black before RNBO sends them.
-    {13, "/hueBase", 0}, {14, "/hueSpan", 255}, {15, "/lightness", 200},
-    {16, "/lightSwing", 60}, {17, "/chroma", 140}
+    // Palette knobs, generated into FastLED rainbow HSV colors on the Teensy.
+    // They start at the Teensy's boot palette so the LEDs aren't black before
+    // RNBO sends them.
+    {13, "/hueBase", 0}, {14, "/hueSpan", 255}, {15, "/volume", 230},
+    {16, "/volumeSwing", 50}, {17, "/saturation", 240}
 };
 constexpr size_t NUM_PARAMS = std::size(PARAMS);
 
