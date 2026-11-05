@@ -22,22 +22,28 @@ static constexpr int WRITE_ERR_REPORT_INTERVAL = 260;
 struct ParamConfig {
     int         index;
     const char* route;
+    uint8_t     initial = 0;   // sent until RNBO sends a value
 };
 
 // constexpr (rather than std::vector) so NUM_PARAMS is a compile-time
 // constant and can size the stack buffers below.
 constexpr ParamConfig PARAMS[] = {
-    {0,  "/brightness"}, {1,  "/radius"},    {2,  "/palette"},
-    {3,  "/divisionsHi"},{4,  "/divisionsLo"},{5,  "/width"},
-    {6,  "/curve"},      {7,  "/rotation"},   {8,  "/fadeIn"},
-    {9,  "/fadeOut"},    {10, "/peakPosition"},{11, "/pattern"},
-    {12, "/gradientOffset"},{13, "/maskType"}
+    {0,  "/brightness"}, {1,  "/radius"},     {2,  "/divisionsHi"},
+    {3,  "/divisionsLo"},{4,  "/width"},      {5,  "/curve"},
+    {6,  "/rotation"},   {7,  "/fadeIn"},     {8,  "/fadeOut"},
+    {9,  "/peakPosition"},{10, "/pattern"},   {11, "/gradientOffset"},
+    {12, "/maskType"},
+    // Palette knobs, generated into OKLCH colors on the Teensy. They start at
+    // the Teensy's boot palette so the LEDs aren't black before RNBO sends them.
+    {13, "/hueBase", 0}, {14, "/hueSpan", 255}, {15, "/lightness", 200},
+    {16, "/lightSwing", 60}, {17, "/chroma", 140}
 };
 constexpr size_t NUM_PARAMS = std::size(PARAMS);
 
 // --- Global State ---
 // Written by generic_handler and read by the frame loop, both on the main
-// thread, so no atomics are needed.
+// thread, so no atomics are needed. Order matches VFXParams in
+// SousaVFX/serial_params.h.
 uint8_t param_data[NUM_PARAMS] = {};
 
 // --- OSC Callback Handler ---
@@ -157,6 +163,7 @@ int main() {
 
     // 3. Register Parameters
     for (const auto& p : PARAMS) {
+        param_data[p.index] = p.initial;
         lo_server_add_method(st, p.route, "i",
                              generic_handler,
                              reinterpret_cast<void*>(
